@@ -360,6 +360,12 @@
 *	- changed:
 *		- support to also load files from "<MOD>_<xxx>" folders
 *
+* v1.8.8: (2019.05.05)
+*	- fixed:
+*		- Players had to wait up to SND_DELAY after map change before being able to play sounds
+*		- Some warnings not being displayed
+*		- Issue where downloading was not working for WAV files (due to "developer 1" fix)
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -472,7 +478,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.8.7"
+#define PLUGIN_VERSION		"1.8.8"
 
 new Enable_Sound[] =  "sound/misc/woohoo.wav"   // Sound played when Sank Sounds being enabled
 new Disable_Sound[] = "sound/misc/awwcrap.wav"  // Sound played when Sank Sounds being disabled
@@ -607,6 +613,8 @@ public plugin_init( )
 	register_cvar("mp_sank_sounds_motd_address", "")
 	
 	g_max_players = get_maxplayers()
+	NextSoundTime = get_gametime() - SND_DELAY
+	LastSoundTime = NextSoundTime  
 	
 	soundData = ArrayCreate(SOUND_DATA_BASE)
 	modSearchPaths = ArrayCreate(64)
@@ -1608,7 +1616,8 @@ public HandleSay( id )
 			ArraySetArray(soundData, ListIndex, sData)
 		}
 	}else if ( allowedToPlay == RESULT_QUOTA_EXCEEDED
-		|| allowedToPlay == RESULT_QUOTA_DURATION_EXCEEDED )
+		|| allowedToPlay == RESULT_QUOTA_DURATION_EXCEEDED
+		|| allowedToPlay == RESULT_SOUND_DELAY )
 	{
 		if ( !displayQuotaExceeded(id) )
 		{
@@ -2368,17 +2377,6 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 			}
 		}
 		
-		// remove ".wav" from files to prevent runtime warnings (using: developer 1)
-		if ( subData[SOUND_TYPE] == SOUND_TYPE_WAV )
-		{
-			new len = strlen(soundfile)
-			if ( len > 4
-				&& equali(soundfile[len - 4], ".wav") )
-			{
-				soundfile[len - 4] = 0;
-			}
-		}
-		
 		if ( allow_global_precache
 			&& precache_sounds == 1
 			&& allowed_to_precache )
@@ -2388,6 +2386,17 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 				engfunc(EngFunc_PrecacheGeneric, soundfile)
 			else
 				engfunc(EngFunc_PrecacheSound, soundfile[6])
+		}
+		
+		// remove ".wav" from files to prevent runtime warnings (using: developer 1)
+		if ( subData[SOUND_TYPE] == SOUND_TYPE_WAV )
+		{
+			new len = strlen(soundfile)
+			if ( len > 4
+				&& equali(soundfile[len - 4], ".wav") )
+			{
+				soundfile[len - 4] = 0;
+			}
 		}
 	}
 	
