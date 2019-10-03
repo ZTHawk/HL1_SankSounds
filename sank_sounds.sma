@@ -13,6 +13,7 @@
 * Functions included in this plugin:
 *	mp_sank_sounds_download	1/0		-	turn internal download system on/off
 *	mp_sank_sounds_freezetime <x>		-	x = time in seconds to wait till first sounds are played (connect sound)
+*	mp_sank_sounds_obey_duration 1/0	-	determine if sounds may overlap or not 1 = do not overlap / 0 = overlap
 *	amx_sound				-	turn Sank Sounds on/off
 *	amx_sound_help				-	prints all available sounds to console
 *	amx_sound_play <dir/wav>		-	plays a specific wav/mp3/speech
@@ -32,7 +33,7 @@
 *	SND_EXIT				-	The Wavs to play when a person exits the game
 *	SND_DELAY				-	Minimum delay between sounds (float)
 *	SND_MODE XX				-	Determinates who can play and who can hear sounds (dead and alive)
-*							choose option below add add then together ( eg: 2 + 8 = 10, means only dead can play and hear sounds )
+*							choose option below add add them together ( eg: 2 + 8 = 10, means only alive can play and hear sounds )
 *							1 = dead can play sounds
 *							2 = alive can play sounds
 *							4 = dead can hear sounds
@@ -180,6 +181,21 @@
 *		- SND_SPLIT has been replaced with more customizable SND_MODE
 *		- removed support to disable MP3
 *
+* v1.5.0b:
+*	- fixed:
+*		- rare runtime error
+*
+* v1.5.1:
+*	- fixed:
+*		- calculation for MP3's encoded with MPEG 2
+*	- added:
+*		- saying "/soundlist" will now show sound list like "/sounds" does
+*		- CVAR: "mp_sank_sounds_obey_duration" to determine if sounds may overlap or not ( default: 1 = do not overlap )
+*
+* v1.5.1b:
+*	- fixed:
+*		- runtime error on mp3 calculation
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -283,7 +299,7 @@ new Enable_Sound[] =	"misc/woohoo.wav"		// Sound played when Sank Soounds enable
 new Disable_Sound[] =	"misc/awwcrap.wav"		// Sound played when Sank Soounds disabled
 
 new plugin_author[] = "White Panther, Luke Sankey, HunteR"
-new plugin_version[] = "1.5.0"
+new plugin_version[] = "1.5.1b"
 
 new FILENAME[128]
 
@@ -311,7 +327,7 @@ new Float:NextSoundTime		// spam protection
 new Float:Join_exit_SoundTime	// spam protection 2
 new bSoundsEnabled = 1		// amx_sound <on/off> or <1/0>
 
-new CVAR_freezetime
+new CVAR_freezetime, CVAR_obey_duration
 
 new g_max_players
 new banned_player_steamids[MAX_BANS][60]
@@ -338,6 +354,7 @@ public plugin_init( )
 	
 	register_cvar("mp_sank_sounds_download", "1")
 	CVAR_freezetime = register_cvar("mp_sank_sounds_freezetime", "0")
+	CVAR_obey_duration = register_cvar("mp_sank_sounds_obey_duration", "1")
 	
 	g_max_players = get_maxplayers()
 }
@@ -1184,13 +1201,17 @@ public HandleSay( id )
 	if( !strlen(Speech) )
 		return PLUGIN_CONTINUE
 	
-	if ( equal(Speech, "/sounds", 7) )
+	if ( equal(Speech, "/sound", 6) )
 	{
-		if ( Speech[7] == 'o' && Speech[8] == 'n' && Speech[9] == 0 )
-			SndOn[id] = 1
-		else if ( Speech[7] == 'o' && Speech[8] == 'f' && Speech[9] == 'f' && Speech[10] == 0 )
-			SndOn[id] = 0
-		else if ( Speech[7] == 0 )
+		if ( Speech[6] == 's' )
+		{
+			if ( Speech[7] == 'o' && Speech[8] == 'n' && Speech[9] == 0 )
+				SndOn[id] = 1
+			else if ( Speech[7] == 'o' && Speech[8] == 'f' && Speech[9] == 'f' && Speech[10] == 0 )
+				SndOn[id] = 0
+			else if ( Speech[7] == 0 )
+				print_sound_list(id, 1)
+		}else if ( equal(Speech[6], "list", 4) )
 			print_sound_list(id, 1)
 		
 		return PLUGIN_HANDLED
@@ -1224,11 +1245,8 @@ public HandleSay( id )
 	if ( ListIndex != -1 )
 	{
 		new Float:gametime = get_gametime()
-		if ( gametime <= NextSoundTime )
-			client_print(id, print_chat, "Sank Sounds >> Sound is still playing")
-		else if ( gametime <= NextSoundTime + SND_DELAY && !is_admin )
-			client_print(id, print_chat, "Sank Sounds >> Minimum sound delay time not reached yet", SND_DELAY)
-		else
+		if ( gametime > NextSoundTime
+			|| get_pcvar_num(CVAR_obey_duration) == 0 )
 		{
 #if DEBUG
 			new name[33]
@@ -1500,9 +1518,14 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 								if ( allowed_to_precache )
 								{
 									if ( mp3 )
+									{
 										precache_generic(file_name)
-									else
+										server_print("precaching MP3 file: %s", file_name)
+									}else
+									{
+										server_print("precaching file: %s", file_name_temp)
 										precache_sound(file_name_temp)
+									}
 								}
 							}
 						}
@@ -1618,7 +1641,8 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 		set_vaultdata("sank_sounds_current_package", current_package_str)
 		
 #if ALLOW_SORT == 1
-		HeapSort(ListIndex)
+		if ( ListIndex > 1 )
+			HeapSort(ListIndex)
 #endif
 	}else
 	{	// file exists returned false, meaning the file didn't exist
@@ -1814,7 +1838,7 @@ stock HeapSort( ListIndex )
 	new i
 	new aSize = ( ListIndex / 2 ) - 1
 	for ( i = aSize; i >= 0; --i )
-		SiftDown(i, ListIndex)
+		SiftDown(i, ListIndex - 1)
 	
 	for ( i = ListIndex - 1; i >= 1; --i )
 	{
@@ -1950,11 +1974,11 @@ Float:get_mp3_duration( mp3_file[] )
 			++file_pos
 			if ( ( byte / 16 ) == 15 )
 			{
-				if ( fgetc(file) > 80 )
+				//if ( fgetc(file) > 80 )
+				if ( fgetc(file) > 0 )
 				{
-					// header starts with hex: FF FB XX, where XX > 50 ( 50 hex = 80 dec )
-					// lowest i saw is 70 hex = 112 dec but just in case add some room
-					// PS: FB can also be XX modulo 16 = 15, but not seen such a case
+					// header starts with hex: FF YY XX
+					// YY must be YY modulo 16 = 15, but mostly it is FB or F3
 					fseek(file, file_pos, SEEK_SET);
 					found_header = 1
 				}else
@@ -1972,13 +1996,10 @@ Float:get_mp3_duration( mp3_file[] )
 	// version check MPEG 1/2... ( 0 = mpeg 2 / 1 = mpeg 1 )
 	new mpeg_version = ( ( byte % 16 ) / 4 ) / 2
 	
-	// needed for frequency_table
-	new mpeg_version_extra
-	if ( mpeg_version == 1 )
-		mpeg_version_extra = 3
-	
-	// layer check.... ( tested: 1 = layer 3 / 2 = layer 2; untested: 3 = layer 1 )
-	new layer = ( ( ( byte % 16 ) / 4 ) % 2 ) * 2 + ( ( ( byte % 16 ) % 4 ) / 2 )
+	// layer check.... normally ( tested: 1 = layer 3 / 2 = layer 2; untested: 3 = layer 1 )
+	// but we make layer 3 be realy 3:
+	//    --->>> 4 - 1 = 3
+	new layer = 4 - ( ( ( ( byte % 16 ) / 4 ) % 2 ) * 2 + ( ( ( byte % 16 ) % 4 ) / 2 ) )
 	
 	//get next byte to read 3rd byte of header. 
 	byte = fgetc(file)
@@ -1986,24 +2007,24 @@ Float:get_mp3_duration( mp3_file[] )
 	// bitrate info
 	new const bitrate_table[] = {
 		//MPEG 2 & 2.5
-		0,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, 0,	// Layer III
-		0,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, 0,	// Layer II
 		0, 32, 48, 56,  64,  80,  96, 112, 128, 144, 160, 176, 192, 224, 256, 0,	// Layer I
+		0,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, 0,	// Layer II
+		0,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, 0,	// Layer III
 		//MPEG 1
-		0, 32, 40, 48,  56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 0,	// Layer III
+		0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0,	// Layer I
 		0, 32, 48, 56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 384, 0,	// Layer II
-		0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0		// Layer I
+		0, 32, 40, 48,  56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 0,	// Layer III
 	}
 	new mp3_bitrate = bitrate_table[mpeg_version * ( 3 * 16 ) + ( layer - 1 ) * 16 + ( byte / 16 )]
 	
 	// frequency info
 	new const frequency_table[] = {
-		32000, 16000,  8000,	// MPEG 2.5
-		    0,     0,     0,	// reserved
 		22050, 24000, 16000,	// MPEG 2
-		44100, 48000, 32000	// MPEG 1
+		44100, 48000, 32000,	// MPEG 1
+		32000, 16000,  8000,	// MPEG 2.5	// have noot seen MPEG 2.5, so UNTESTED
+		    0,     0,     0	// reserved
 	}
-	new mp3_frequency = frequency_table[mpeg_version_extra * 3 + ( byte % 16 ) / 4]
+	new mp3_frequency = frequency_table[mpeg_version * 3 + ( byte % 16 ) / 4]
 	
 	// padding bit
 	new padding_bit = ( ( byte % 16 ) % 4 ) / 2
@@ -2016,11 +2037,17 @@ Float:get_mp3_duration( mp3_file[] )
 	// all header info over..... calculating frame size.
 	new frame_size = ( 144000 * mp3_bitrate / mp3_frequency ) + padding_bit
 	
+	new size_of_file = file_size(mp3_file, 0)
+	
 	//no. of frames...
-	new frames = ( file_size(mp3_file, 0) - header_start ) / frame_size
+	new frames = ( size_of_file - header_start ) / frame_size
+	
+	// MPEG 2 Layer 3 seems to have twice more frames
+	if ( mpeg_version == 0 && layer == 3 )
+		frames *= 2
 	
 	//song length...
-	return float(frames) * 26.0 / 1000.0
+	return float(size_of_file) / ( float(mp3_bitrate) * 1000.0 ) * 8.0
 }
 
 /*
