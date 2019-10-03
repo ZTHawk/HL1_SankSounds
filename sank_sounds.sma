@@ -123,10 +123,14 @@
 *	- fixed:
 *		- when setting DISPLAY_KEYWORDS to 0 chat was disabled
 *
+* v.1.4.2:
+*	- added:
+*		- option to include sounds from "half-life.gcf" and <mod>.gcf
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 500 sounds (HL cannot handle it)
 *		but if u disable the internal download system u can use as many sounds as the plugin can handle
-*		(max should be over 100k sounds (depending on the Array Defines ), BUT the plugin speed
+*		(max should be over 100000 sounds (depending on the Array Defines ), BUT the plugin speed
 *		is another question with thousands of sounds ;) )
 *	
 *	b) File has to look like this:
@@ -160,6 +164,9 @@
 *		package 2
 *		hi;			misc/hi.wav
 *		
+*		modspecific
+*		<keyword>;		<location>/<name>.wav
+*		
 *		Follow these instructions
 *		wavs:
 *			- base directory is "mod-dir/sound/"
@@ -178,6 +185,9 @@
 *			- type package <space> number
 *			- everthing below will be loaded only once and switched to next package on map-change
 *			- if only 1 package this package will be used every map-change
+*		modspecific:
+*			- everything sound below that line must be inside half-life.gcf or <yourmod>.gcf
+*			- if you add other files then said above they may/will crash your server as these sounds are assumed to be existent
 *	
 *	c) speech sounds must be put in quotes (eg: target; "target destroyed")
 *		you may not put different speech types into 1 speech or the speech wont be played
@@ -223,7 +233,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 new plugin_author[] = "White Panther, Luke Sankey, HunteR"
-new plugin_version[] = "1.4.1"
+new plugin_version[] = "1.4.2"
 
 new FILENAME[128]
 
@@ -1164,7 +1174,7 @@ parse_sound_file( loadfile[] )
 			current_package = str_to_num(current_package_str)
 		}
 		
-		new allowed_to_precache = 1
+		new allowed_to_precache = 1, allow_check_existence = 1
 		new allow_global_precache = get_cvar_num("mp_sank_sounds_download")
 		new mapname[32]
 		get_mapname(mapname, 31)
@@ -1185,6 +1195,8 @@ parse_sound_file( loadfile[] )
 					current_package = 1
 					allowed_to_precache = 1
 				}
+				allow_check_existence = 1
+				
 				continue
 			}else if ( equali(strLineBuf, "mapname ", 8) )
 			{
@@ -1192,6 +1204,14 @@ parse_sound_file( loadfile[] )
 					allowed_to_precache = 1
 				else
 					allowed_to_precache = 0
+				
+				allow_check_existence = 1
+				
+				continue
+			}else if ( equali(strLineBuf, "modspecific") )
+			{
+				allow_check_existence = 0
+				
 				continue
 			}
 			
@@ -1224,10 +1244,10 @@ parse_sound_file( loadfile[] )
 					// Now remove any spaces or tabs from around the strings -- clean them up
 					trim_spaces(temp_str)
 					
-					// check if file lenght is bigger than array
+					// check if file length is bigger than array
 					if ( strlen(temp_str) > TOK_LENGTH )
 					{
-						log_amx("Sank Sound Plugin >> Word or Wav is too long: ^"%s^". Lenght is %i but max is %i (change name/remove spaces in config or increase TOK_LENGTH)", temp_str, strlen(temp_str), TOK_LENGTH)
+						log_amx("Sank Sound Plugin >> Word or Wav is too long: ^"%s^". Length is %i but max is %i (change name/remove spaces in config or increase TOK_LENGTH)", temp_str, strlen(temp_str), TOK_LENGTH)
 						log_amx("Sank Sound Plugin >> Skipping this word/wav combo")
 						fatal_error = 1
 						break
@@ -1252,7 +1272,7 @@ parse_sound_file( loadfile[] )
 								copy(file_name_temp, 127, file_name)
 								format(file_name, 127, "sound/%s", file_name)
 							}
-							if ( !file_exists(file_name) )
+							if ( !file_exists(file_name) && allow_check_existence )
 							{
 								log_amx("Sank Sound Plugin >> Trying to load a file that dont exist. Skipping this file: ^"%s^"", file_name)
 								i--
@@ -1274,7 +1294,7 @@ parse_sound_file( loadfile[] )
 						}
 					}
 					
-					// sound exists and has correct lenght, so copy it into our big array
+					// sound exists and has correct length, so copy it into our big array
 					copy(WadOstrings[TOK_LENGTH*i], TOK_LENGTH, temp_str)
 					
 					if ( !strlen(strLineBuf) )
@@ -1501,12 +1521,12 @@ playsoundall( sound[], alive = 1 )
 
 trim_spaces( str_to_trim[] )
 {
-	new lenght = strlen(str_to_trim)
+	new length = strlen(str_to_trim)
 	new char_end
-	if ( lenght )
+	if ( length )
 	{
 		new j, char_start, char_num, char_found
-		for( j = 0; j < lenght; j++ )
+		for( j = 0; j < length; j++ )
 		{
 			if ( isspace(str_to_trim[j]) )
 			{
@@ -1529,7 +1549,6 @@ trim_spaces( str_to_trim[] )
 		
 	}
 	str_to_trim[char_end] = 0
-	return str_to_trim
 }
 
 print_sound_list( id , motd_msg = 0 )
