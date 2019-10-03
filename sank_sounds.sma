@@ -1428,7 +1428,7 @@ public HandleSay( id )
 				
 				LastSoundTime = gametime
 			}
-		}else client_print(id, print_chat, "Sank Sounds >> XXX")
+		}
 	}else if ( gametime <= NextSoundTime + SND_DELAY
 		&& obey_duration_mode != 0 )
 		client_print(id, print_chat, "Sank Sounds >> Sound is still playing ( wait %3.1f seconds )", NextSoundTime + SND_DELAY - gametime)
