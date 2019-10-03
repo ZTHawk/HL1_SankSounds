@@ -221,6 +221,11 @@
 *		- both "SND_LIST.CFG" and "snd-list.cfg" will work now ( linux )
 *		- code improvements
 *		- faster config parsing/writing
+* v1.5.5:
+*	- fixed:
+*		- error in mp3 calculation ( once again :( )
+*	- added:
+*		- additional debug info for mp3's when compiled in DEGUB_MODE 1
 *
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
@@ -305,7 +310,7 @@
 #include <engine>	// backwards campatability, amxX 1.75 does not need it anymore
 
 // set this to 1 to get some debug messages
-#define	DEBUG	0
+#define	DEBUG_MODE	0
 
 // turn this off to stop list from being sorted by keywords in alphabetic order
 #define	ALLOW_SORT	1
@@ -326,7 +331,7 @@ new Enable_Sound[] =	"misc/woohoo.wav"		// Sound played when Sank Soounds enable
 new Disable_Sound[] =	"misc/awwcrap.wav"		// Sound played when Sank Soounds disabled
 
 new plugin_author[] = "White Panther, Luke Sankey, HunteR"
-new plugin_version[] = "1.5.4"
+new plugin_version[] = "1.5.5"
 
 new config_filename[128]
 
@@ -1385,7 +1390,7 @@ public HandleSay( id )
 			&& ( is_admin						// 2a. check further if admin
 				|| gametime > LastSoundTime + SND_DELAY ) ) )	// 2b. or for delay time
 	{
-#if DEBUG
+#if DEBUG_MODE == 1
 		new name[33]
 		get_user_name(id, name, 32)
 		client_print(id, print_console, "Checking Quota for %i:  %s in %s", name, Text, Speech)
@@ -1803,7 +1808,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 	// Next we do some error checking, some setup, and we're done parsing!
 	ErrorCheck()
 	
-#if DEBUG
+#if DEBUG_MODE == 1
 	// Log some info for the nosey admin
 	log_amx("Sank Sounds >> Sound quota set to %i, time %5.1f", SND_MAX, SND_MAX_DUR)
 	
@@ -2190,10 +2195,11 @@ Float:get_mp3_duration( mp3_file[] )
 			{
 				//if ( fgetc(file) > 80 )
 				//if ( fgetc(file) > 0 )
-				if ( fgetc(file) > 40 )
+				//if ( fgetc(file) > 40 )
+				if ( fgetc(file) > 16 )
 				{
 					// header starts with hex: FF YY XX
-					// YY must be YY modulo 16 = 15, but mostly it is FB or F3
+					// YY must be YY modulo 16 = 15, but NOT equal 255 (mostly it is FB or F3)
 					fseek(file, file_pos, SEEK_SET);
 					found_header = 1
 				}else
@@ -2204,7 +2210,7 @@ Float:get_mp3_duration( mp3_file[] )
 	}while ( !found_header )
 	
 	// position of first frame header......
-	file_pos -= 2
+//	file_pos -= 2
 	
 	//new header_start = file_pos
 	
@@ -2215,6 +2221,14 @@ Float:get_mp3_duration( mp3_file[] )
 	// but we make layer 3 be realy 3:
 	//    --->>> 4 - 1 = 3
 	new layer = 4 - ( ( ( ( byte % 16 ) / 4 ) % 2 ) * 2 + ( ( ( byte % 16 ) % 4 ) / 2 ) )
+	
+#if DEBUG_MODE == 1
+	server_print("Sank Sounds >> DEBUG for file ^"%s^"", mp3_file)
+	server_print("Sank Sounds >> byte = %i", byte)
+	server_print("Sank Sounds >> file_pos = %i", file_pos)
+	server_print("Sank Sounds >> mpeg_version = %i", mpeg_version)
+	server_print("Sank Sounds >> layer = %i", layer)
+#endif
 	
 	//get next byte to read 3rd byte of header. 
 	byte = fgetc(file)
@@ -2230,7 +2244,16 @@ Float:get_mp3_duration( mp3_file[] )
 		0, 32, 48, 56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 384, 0,	// Layer II
 		0, 32, 40, 48,  56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 0,	// Layer III
 	}
+#if DEBUG_MODE == 1
+	server_print("Sank Sounds >> byte = %i", byte)
+	server_print("Sank Sounds >> bitrate_table index = %i", (mpeg_version * ( 3 * 16 ) + ( layer - 1 ) * 16 + ( byte / 16 )))
+#endif
+	
 	new mp3_bitrate = bitrate_table[mpeg_version * ( 3 * 16 ) + ( layer - 1 ) * 16 + ( byte / 16 )]
+	
+#if DEBUG_MODE == 1
+	server_print("Sank Sounds >> mp3_bitrate = %i", mp3_bitrate)
+#endif
 	
 	// frequency info
 //	new const frequency_table[] = {
