@@ -45,6 +45,7 @@
 *	say "/soundson"         -    now the player can hear sounds again
 *	say "/soundsoff"        -    player disables ability to hear sounds
 *	say "/sounds"           -    shows a list of all sounds
+*	say "/soundlist"        -    shows a list of all sounds
 *
 * ported to Amx Mod X by White Panther
 *
@@ -317,10 +318,18 @@
 *
 * v1.8.0: (11.01.2012)
 *	- fixed:
-*		- adding new sounds with console command could add it but not being available
+*		- adding new sounds with console command could add it but it would not be available
 *	- changed:
-*		- dynamic arrays are now used to store key/sound data to remove key limit
+*		- dynamic arrays are now used to store key/sound data to remove limits
 *		- saving to default config file is now allowed
+*
+* v1.8.1: (14.03.2013)
+*	- fixed:
+*		- determination if sound can be played for admins
+*		- "amx_sound_add" could add empty keywords if sound was invalid
+*		- "amx_sound_add" is not checking sounds if they exist anymore
+*	- changed:
+*		- increased motd webpage link length to 255 characters
 *
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
@@ -434,7 +443,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.8.0"
+#define PLUGIN_VERSION		"1.8.1"
 
 new Enable_Sound[] =  "misc/woohoo.wav"   // Sound played when Sank Soounds being enabled
 new Disable_Sound[] = "misc/awwcrap.wav"  // Sound played when Sank Soounds being disabled
@@ -467,7 +476,7 @@ new banned_player_steamids[MAX_BANS][60]
 new restrict_playing_sounds[33]
 new sound_quota_steamids[33][60]
 
-new motd_sound_list_address[128]
+new motd_sound_list_address[256]
 
 enum
 {
@@ -568,7 +577,7 @@ public plugin_init( )
 
 public plugin_cfg( )
 {
-	get_cvar_string("mp_sank_sounds_motd_address", motd_sound_list_address, 127)
+	get_cvar_string("mp_sank_sounds_motd_address", motd_sound_list_address, 255)
 	
 	new configpath[61]
 	get_configsdir(configpath, 60)
@@ -619,6 +628,9 @@ public client_putinserver( id )
 	if ( Join_exit_SoundTime >= gametime )
 		return
 	
+	if ( sData[SOUND_AMOUNT] == 0 )
+		return
+	
 	new rand = random(sData[SOUND_AMOUNT])
 	new subData[SOUND_DATA_SUB]
 	ArrayGetArray(sData[SUB_INDEX], rand, subData)
@@ -649,6 +661,9 @@ public client_disconnect( id )
 		return
 	
 	if ( Join_exit_SoundTime >= gametime )
+		return
+	
+	if ( sData[SOUND_AMOUNT] == 0 )
 		return
 	
 	new rand = random(sData[SOUND_AMOUNT])
@@ -777,9 +792,10 @@ public amx_sound_add( id , level , cid )
 	new subData[SOUND_DATA_SUB]
 	new aLen = ArraySize(soundData)
 	new subLen
+	new resCode
 	for( i = 0; i < aLen; ++i )
 	{
-		ArrayGetArray(soundData, 0, sData)
+		ArrayGetArray(soundData, i, sData)
 		// If no match found, keep looping
 		if ( !equal(Word, sData[KEYWORD], TOK_LENGTH) )
 			continue
@@ -788,7 +804,7 @@ public amx_sound_add( id , level , cid )
 		subLen = ArraySize(sData[SUB_INDEX])
 		for( j = 0; j < subLen; ++j )
 		{
-			ArrayGetArray(sData[SUB_INDEX], 0, subData)
+			ArrayGetArray(sData[SUB_INDEX], j, subData)
 			// See if this is the same as the new Sound
 			if ( equali(Sound, subData[SOUND_FILE], TOK_LENGTH) )
 			{
@@ -799,17 +815,25 @@ public amx_sound_add( id , level , cid )
 		}
 		
 		// Word exists, but Sound is new to the list, so add entry
-		array_add_inner_element(i, j, Sound)
-		client_print(id, print_console, "Sank Sounds >> ^"%s^" successfully added to ^"%s^"", Sound, Word)
+		resCode = array_add_inner_element(i, j, Sound, 0)
+		if ( resCode != -1 )
+			client_print(id, print_console, "Sank Sounds >> ^"%s^" successfully added to ^"%s^"", Sound, Word)
 		
 		return PLUGIN_HANDLED
 	}
 	
 	// Word/Sound combo is new to the list, so make a new entry
 	array_add_element(i, Word)
-	array_add_inner_element(i, 0, Sound)
-	ArraySort(soundData, "sortSoundDataFunc")
-	client_print(id, print_console, "Sank Sounds >> ^"%s; %s^" successfully added", Word, Sound)
+	resCode = array_add_inner_element(i, 0, Sound, 0)
+	if ( resCode != -1 )
+	{
+		ArraySort(soundData, "sortSoundDataFunc")
+		client_print(id, print_console, "Sank Sounds >> ^"%s; %s^" successfully added", Word, Sound)
+	}else
+	{
+		// removed keyword because no sound could be added
+		array_remove(i)
+	}
 	
 	return PLUGIN_HANDLED
 }
@@ -1404,7 +1428,8 @@ public HandleSay( id )
 		if ( Speech[6] == 's' )
 		{
 			if ( Speech[7] == 'o'
-				&& Speech[8] == 'n' )
+				&& Speech[8] == 'n'
+				&& Speech[9] == 0 )
 			{
 				SndOn[id] = 1
 				client_print(id, print_chat, "Sank Sounds >> You will hear all sounds again")
@@ -1466,13 +1491,16 @@ public HandleSay( id )
 	if ( ListIndex == -1 )
 		return PLUGIN_CONTINUE
 	
+	if ( sData[SOUND_AMOUNT] == 0 )
+		return PLUGIN_CONTINUE
+	
 	new obey_duration_mode = get_pcvar_num(CVAR_obey_duration)
 	new Float:gametime = get_gametime()
 	new allowedToPlay = isUserAllowed2Play(id, gametime, obey_duration_mode)
 	if ( allowedToPlay == RESULT_OK )
 	{
 		displayQuotaWarning(id)
-		new rand = random(sData[SOUND_AMOUNT])
+		new rand
 		new timeout
 		new playFile[TOK_LENGTH]
 		
@@ -1858,6 +1886,31 @@ isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 {
 	// order of checks is important
 	
+	new admin_flags = get_user_flags(id)
+	
+	// check if only admins can play sounds
+	if ( ADMINS_ONLY
+		&& !admin_flags )
+		return RESULT_ADMINS_ONLY
+	
+	// check if super admin
+	if ( admin_flags & ADMIN_RCON )
+	{
+		// check if super admin has to obey duration
+		if ( !(obey_duration_mode & 4) )
+			return RESULT_OK
+		return RESULT_SOUND_DELAY
+	}
+	
+	// check if admin
+	if ( admin_flags & SND_IMMUNITY )
+	{
+		// check if admin has to obey duration
+		if ( !(obey_duration_mode & 2) )
+			return RESULT_OK
+		return RESULT_SOUND_DELAY
+	}
+	
 	if ( SND_MAX != 0
 		&& SndCount[id] >= SND_MAX )
 		return RESULT_QUOTA_EXCEEDED
@@ -1866,30 +1919,12 @@ isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 		&& SndLenghtCount[id] > SND_MAX_DUR )
 		return RESULT_QUOTA_DURATION_EXCEEDED
 	
-	// check for sound overlapping + delay time
-	if ( gametime > NextSoundTime + SND_DELAY )
-		return RESULT_OK
-	
-	new admin_flags = get_user_flags(id)
-	// check if only admins can play sounds
-	if ( ADMINS_ONLY
-		&& !admin_flags )
-		return RESULT_ADMINS_ONLY
-	
-	// check if super admin
-	// and check if super admin have to obey duration
-	if ( admin_flags & ADMIN_RCON				
-		&& !(obey_duration_mode & 4) )
-		return RESULT_OK
-	
 	// check if player is allowed to play sounds depending on alive config
 	if ( !(SND_MODE & (is_user_alive(id) + 1)) )
 		return RESULT_BAD_ALIVE_STATUS
 	
-	// check if admin
-	// and check if admin have to obey duration
-	if ( admin_flags & SND_IMMUNITY
-		&& !(obey_duration_mode & 2) )
+	// check for sound overlapping + delay time
+	if ( gametime > NextSoundTime + SND_DELAY )
 		return RESULT_OK
 	
 	// check if overlapping is allowed
@@ -1903,8 +1938,7 @@ isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 
 displayQuotaWarning( id )
 {
-	if ( ADMINS_ONLY
-		&& get_user_flags(id) & SND_IMMUNITY )
+	if ( get_user_flags(id) & SND_IMMUNITY )
 		return
 	
 	if ( SND_MAX != 0 )
@@ -1921,8 +1955,7 @@ displayQuotaWarning( id )
 
 displayQuotaExceeded( id )
 {
-	if ( ADMINS_ONLY
-		&& get_user_flags(id) & SND_IMMUNITY )
+	if ( get_user_flags(id) & SND_IMMUNITY )
 		return 0
 	
 	if ( SND_MAX != 0 )
@@ -2029,7 +2062,7 @@ print_sound_list( id , motd_msg = 0 )
 	new info_text[64] = "say < keyword >: plays A sound. keYwords are listed Below:"
 	if ( strlen(motd_sound_list_address) > 3 )	// make sure at least you have something like: a.b ( http://a.b )
 	{
-		copy(motd_buffer, 127, motd_sound_list_address)
+		copy(motd_buffer, 255, motd_sound_list_address)
 		skip_for_loop = 1
 		motd_msg = 1
 	}else if ( motd_msg )
