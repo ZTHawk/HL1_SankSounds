@@ -331,6 +331,10 @@
 *	- changed:
 *		- increased motd webpage link length to 255 characters
 *
+* v1.8.2: (01.09.2013)
+*	- fixed:
+*		- exit sounds could be replaced by keyword sounds
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -443,7 +447,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.8.1"
+#define PLUGIN_VERSION		"1.8.2"
 
 new Enable_Sound[] =  "misc/woohoo.wav"   // Sound played when Sank Soounds being enabled
 new Disable_Sound[] = "misc/awwcrap.wav"  // Sound played when Sank Soounds being disabled
@@ -2134,9 +2138,9 @@ public sortSoundDataFunc( Array:array , item1 , item2 , const data[] , data_size
 		return -1;
 	if ( (data2[FLAGS] & FLAGS_JOIN_SND) == FLAGS_JOIN_SND )
 		return 1;
-	if ( (data1[FLAGS] & FLAGS_EXIT_SND) == FLAGS_JOIN_SND )
+	if ( (data1[FLAGS] & FLAGS_EXIT_SND) == FLAGS_EXIT_SND )
 		return -1;
-	if ( (data2[FLAGS] & FLAGS_EXIT_SND) == FLAGS_JOIN_SND )
+	if ( (data2[FLAGS] & FLAGS_EXIT_SND) == FLAGS_EXIT_SND )
 		return 1;
 	return strcmp(data1[KEYWORD], data2[KEYWORD])
 }
