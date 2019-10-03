@@ -27,8 +27,9 @@
 *	amx_sound_unban <player>		-	unbans player from using sounds for current map
 *
 * Config file settings:
-*	SND_WARN 				- 	The number at which a player will get warned for playing too many sounds
-*	SND_MAX					-	The number at which a player will get muted for playing too many sounds
+*	SND_WARN 				- 	The number at which a player will get warned for playing too many sounds each map
+*	SND_MAX					-	The number at which a player will get muted for playing too many sounds each map
+*	SND_MAX_DUR				-	The maximum amount of seconds a player can play sounds each map (float )
 *	SND_JOIN				-	The Wavs to play when a person joins the game
 *	SND_EXIT				-	The Wavs to play when a person exits the game
 *	SND_DELAY				-	Minimum delay between sounds (float)
@@ -196,6 +197,14 @@
 *	- fixed:
 *		- runtime error on mp3 calculation
 *
+* v1.5.2:
+*	- fixed:
+*		- support for SND_DELAY was accidently removed
+*		- some possible minor bugs
+*	- added:
+*		- SND_MAX_DUR: maximum of seconds a player can play sounds each map
+*		- two new options for SND_MODE ( read help for more information )
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -205,6 +214,7 @@
 *	
 *	b) File has to look like this:
 *		SND_MAX;		20
+*		SND_MAX_DUR;		600.0
 *		SND_WARN;		17
 *		SND_JOIN;		misc/hi.wav
 *		SND_EXIT;		misc/comeagain.wav
@@ -299,15 +309,17 @@ new Enable_Sound[] =	"misc/woohoo.wav"		// Sound played when Sank Soounds enable
 new Disable_Sound[] =	"misc/awwcrap.wav"		// Sound played when Sank Soounds disabled
 
 new plugin_author[] = "White Panther, Luke Sankey, HunteR"
-new plugin_version[] = "1.5.1b"
+new plugin_version[] = "1.5.2"
 
 new FILENAME[128]
 
 new SndCount[33] = {0, ...}			// Holds the number telling how many sounds a player has played
+new Float:SndLenghtCount[33] = {0.0, ...}
 new SndOn[33] = {1, ...}
 
 new SND_WARN = 0				// The number at which a player will get warned for playing too many sounds
 new SND_MAX = 0					// The number at which a player will get kicked for playing too many sounds
+new Float:SND_MAX_DUR = 0.0
 new Join_wavs[TOK_LENGTH * MAX_RANDOM]		// The Wavs to play when a person joins the game
 new Float:Join_sound_duration[MAX_RANDOM]
 new Exit_wavs[TOK_LENGTH * MAX_RANDOM]		// The Wavs to play when a person exits the game
@@ -325,6 +337,7 @@ new soundnum_for_keyword[MAX_KEYWORDS]
 
 new Float:NextSoundTime		// spam protection
 new Float:Join_exit_SoundTime	// spam protection 2
+new Float:LastSoundTime = 0.0
 new bSoundsEnabled = 1		// amx_sound <on/off> or <1/0>
 
 new CVAR_freezetime, CVAR_obey_duration
@@ -374,6 +387,7 @@ public client_putinserver( id )
 	{
 		copy(sound_quota_steamids[id], 59, steamid)
 		SndCount[id] = 0
+		SndLenghtCount[id] = 0.0
 	}
 }
 
@@ -455,7 +469,10 @@ public amx_sound_reset( id , level , cid )
 		{
 			client_print(id, print_console, "Sank Sounds >> Quota has been reseted for all players")
 			for ( i = 1; i <= g_max_players; ++i )
+			{
 				SndCount[i] = 0
+				SndLenghtCount[i] = 0.0
+			}
 		}else
 		{
 			i = cmd_target(id, arg, 1)
@@ -463,6 +480,7 @@ public amx_sound_reset( id , level , cid )
 				return PLUGIN_HANDLED
 			
 			SndCount[i] = 0
+			SndLenghtCount[i] = 0.0
 			new name[33]
 			get_user_name(i, name, 32)
 			client_print(id, print_console, "Sank Sounds >> Quota has been reseted for ^"%s^"", name)
@@ -500,6 +518,10 @@ public amx_sound_add( id , level , cid )
 		if ( equali(Word, "SND_MAX") )
 		{
 			SND_MAX = str_to_num(Wav)
+			bGotOne = 1
+		}else if ( equali(Word, "SND_MAX_DUR") )
+		{
+			SND_MAX_DUR = floatstr(Wav)
 			bGotOne = 1
 		}else if ( equali(Word, "SND_WARN") )
 		{
@@ -922,6 +944,7 @@ public amx_sound_write( id , level , cid )
 	
 		# Important parameters:
 		SND_MAX;		20
+		SND_MAX_DUR;		600.0
 		SND_WARN;		17
 		SND_JOIN;		misc/hi.wav
 		SND_EXIT;		misc/comeagain.wav
@@ -944,15 +967,17 @@ public amx_sound_write( id , level , cid )
 		get_user_name(id, name, 32)
 		get_time("%H:%M:%S %A %B %d, %Y", TimeStamp, 127)
 		
-		format(Text, 127, "# TimeStamp:^t^t%s", TimeStamp)
+		formatex(Text, 127, "# TimeStamp:^t^t%s", TimeStamp)
 		write_file(savefile, Text)
-		format(Text, 127, "# File created by:^t%s", name)
+		formatex(Text, 127, "# File created by:^t%s", name)
 		write_file(savefile, Text)
 		write_file(savefile, "")		// blank line
 		write_file(savefile, "# Important parameters:")
-		format(Text, 127, "SND_MAX;^t^t%d", SND_MAX)
+		formatex(Text, 127, "SND_MAX;^t^t%d", SND_MAX)
 		write_file(savefile, Text)
-		format(Text, 127, "SND_WARN;^t^t%d", SND_WARN)
+		formatex(Text, 127, "SND_MAX_DUR;^t^t%5.1f", SND_MAX_DUR)
+		write_file(savefile, Text)
+		formatex(Text, 127, "SND_WARN;^t^t%d", SND_WARN)
 		write_file(savefile, Text)
 		
 		new join_snd_buff[TOK_LENGTH * MAX_RANDOM], exit_snd_buff[TOK_LENGTH * MAX_RANDOM]
@@ -1028,9 +1053,9 @@ public amx_sound_print_matrix( id , level , cid )
 			id = 0
 		
 		if ( id )
-			client_print(id, print_console, "SND_WARN: %d^nSND_MAX: %d", SND_WARN, SND_MAX)
+			client_print(id, print_console, "SND_WARN: %d^nSND_MAX: %d^nSND_MAX_DUR: %5.1f^n", SND_WARN, SND_MAX, SND_MAX_DUR)
 		else
-			server_print("SND_WARN: %d^nSND_MAX: %d^n", SND_WARN, SND_MAX)
+			server_print("SND_WARN: %d^nSND_MAX: %d^nSND_MAX_DUR: %5.1f^n", SND_WARN, SND_MAX, SND_MAX_DUR)
 		
 		for( i = 0; i < MAX_RANDOM; ++i )
 		{
@@ -1245,8 +1270,10 @@ public HandleSay( id )
 	if ( ListIndex != -1 )
 	{
 		new Float:gametime = get_gametime()
-		if ( gametime > NextSoundTime
-			|| get_pcvar_num(CVAR_obey_duration) == 0 )
+		if ( is_admin							// 1. skip admins for checks
+			|| gametime > NextSoundTime + SND_DELAY			// 2. check for sound overlapping + delay time
+			|| ( get_pcvar_num(CVAR_obey_duration) == 0		// 3. check if overlapping is allowed
+				&& gametime > LastSoundTime + SND_DELAY ) )	//    if so check for delay time
 		{
 #if DEBUG
 			new name[33]
@@ -1293,13 +1320,19 @@ public HandleSay( id )
 						
 						// Increment their playsound count
 						++SndCount[id]
+						SndLenghtCount[id] += Sound_duration[ListIndex][rand + 1]
 						
 						//playsoundall(playFile, is_user_alive(id))
 						playsoundall(playFile, SND_MODE & 16, alive)
+						
+						LastSoundTime = gametime
 					}
 				}
 			}
-		}
+		}else if ( gametime <= NextSoundTime + SND_DELAY
+			&& get_pcvar_num(CVAR_obey_duration) == 1 )
+			client_print(id, print_chat, "Sank Sounds >> Sound is still playing ( wait %3.1f seconds )", NextSoundTime + SND_DELAY - gametime)
+		
 		if ( DISPLAY_KEYWORDS == 0 )
 			return PLUGIN_HANDLED
 	}
@@ -1329,6 +1362,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 
 	# Set the necessary variables
 	SND_MAX;		20
+	SND_MAX_DUR;		600.0
 	SND_WARN;		17
 	SND_JOIN;		misc/hi.wav
 	SND_EXIT;		misc/comeagain.wav
@@ -1473,7 +1507,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 					// check if file exists, if not skip it
 					if ( !i )
 					{	// first is not a sound file
-						if ( equali(temp_str, "SND_MAX") || equali(temp_str, "SND_WARN") || equali(temp_str, "SND_DELAY") || equali(temp_str, "SND_MODE") || equali(temp_str, "EXACT_MATCH") || equali(temp_str, "ADMINS_ONLY") || equali(temp_str, "DISPLAY_KEYWORDS") )
+						if ( equali(temp_str, "SND_MAX") || equali(temp_str, "SND_MAX_DUR") || equali(temp_str, "SND_WARN") || equali(temp_str, "SND_DELAY") || equali(temp_str, "SND_MODE") || equali(temp_str, "EXACT_MATCH") || equali(temp_str, "ADMINS_ONLY") || equali(temp_str, "DISPLAY_KEYWORDS") )
 							is_wordwav_combo = 0
 						else if ( equali(temp_str, "SND_JOIN") || equali(temp_str, "SND_EXIT") )
 							is_keyword_sound = 0
@@ -1556,6 +1590,8 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 					// First look for special parameters
 					if ( equali(WadOstrings, "SND_MAX") )
 						SND_MAX = str_to_num(WadOstrings[TOK_LENGTH * 1])
+					else if ( equali(WadOstrings, "SND_MAX_DUR") )
+						SND_MAX_DUR = floatstr(WadOstrings[TOK_LENGTH * 1])
 					else if ( equali(WadOstrings, "SND_WARN") )
 						SND_WARN = str_to_num(WadOstrings[TOK_LENGTH * 1])
 					else if ( equali(WadOstrings, "SND_JOIN") )
@@ -1627,7 +1663,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 		
 #if DEBUG
 		// Log some info for the nosey admin
-		log_amx("Sank Sounds >> Sound quota set to %i", SND_MAX)
+		log_amx("Sank Sounds >> Sound quota set to %i, time %5.1f", SND_MAX, SND_MAX_DUR)
 		
 		amx_sound_print_matrix(0, 0, 0)
 		server_print("Sank Sounds >> Done parsing ^"%s^" file^n", loadfile)
@@ -1667,18 +1703,36 @@ QuotaExceeded( id )
 		return 1
 	
 	// If the sound limitation is disabled, then return happily.
-	if ( !admin_check && SND_MAX != 0 )
+	if ( !admin_check )
 	{
-		if ( SndCount[id] > SND_MAX && SndCount[id] + 3 > SND_MAX )
+		new exceeded = 0
+		if ( SND_MAX != 0 )
 		{
-			client_print(id, print_chat, "Sank Sounds >> You were warned, you are muted")
-			
-			// player is already muted, we increament here to save a variable to protect player from "you are muted" spam
-			++SndCount[id]
-			
+			if ( SndCount[id] > SND_MAX )
+			{
+				if ( SndCount[id] - 3 < SND_MAX )
+				{
+					client_print(id, print_chat, "Sank Sounds >> You were warned, you are muted")
+					
+					// player is already muted, we increament here to save a variable to protect player from "you are muted" spam ( only 3 warnings )
+					++SndCount[id]
+				}
+				
+				exceeded = 1
+			}else if ( SndCount[id] >= SND_WARN )
+				client_print(id, print_chat, "Sank Sounds >> You have %d left before you get muted", SND_MAX - SndCount[id])
+		}
+		
+		if ( SND_MAX_DUR != 0.0 )
+		{
+			if ( SndLenghtCount[id] > SND_MAX_DUR )
+			{
+				exceeded = 1
+			}
+		}
+		
+		if ( exceeded )
 			return 1
-		}else if ( SndCount[id] >= SND_WARN )
-			client_print(id, print_chat, "Sank Sounds >> You have %d left before you get muted", SND_MAX - SndCount[id])
 	}
 	return 0
 }
@@ -1695,12 +1749,21 @@ ErrorCheck( )
 		log_amx("Sank Sounds >> SND_DELAY set to default value 0")
 		SND_DELAY = 0.0
 	}
+	
 	// If SND_MAX is zero, then sounds quota is disabled. Can't have negative quota
 	if ( SND_MAX < 0 )
 	{
 		SND_MAX = 0	// in case it was negative
 		log_amx("Sank Sounds >> SND_MAX cannot be negative. Setting to value 0")
 	}
+	
+	// If SND_MAX_DUR is zero, then sounds quota is disabled. Can't have negative quota
+	if ( SND_MAX_DUR < 0.0 )
+	{
+		SND_MAX_DUR = 0.0	// in case it was negative
+		log_amx("Sank Sounds >> SND_MAX_DUR cannot be negative. Setting to value 0.0")
+	}
+	
 	// If SND_WARN is zero, then we can't have warning every
 	// time a keyWord is said, so we default to 3 less than max
 	else if ( ( SND_WARN <= 0 && SND_MAX != 0 ) || SND_MAX < SND_WARN )
@@ -1738,11 +1801,13 @@ playsoundall( sound[], split_dead_alive = 0 , sender_alive_status = 0 )
 		{
 			if ( SndOn[i] )
 			{
-				if ( SND_MODE & ( ( alive = is_user_alive(i) ) * 4 + 4 ) )
+				alive = is_user_alive(i)
+				if ( SND_MODE & ( alive * 4 + 4 ) )
 				{
 					if ( split_dead_alive )
 					{
-						if ( alive == sender_alive_status )
+						if ( alive == sender_alive_status		// make sure if splited both are in same group
+							|| SND_MODE & ( alive * 32 + 32 ) )	// OR check if different groups may hear each other
 						{
 							if ( is_mp3 )
 								client_cmd(i, "mp3 play ^"%s^"", sound)
