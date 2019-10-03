@@ -35,7 +35,7 @@
 *	SND_EXIT                - The Sounds to play when a person exits the game
 *	SND_DELAY               - Minimum delay between sounds (float)
 *	SND_MODE XX             - Determinates who can play and who can hear sounds (see readme.txt for details)
-*	SND_IMMUNITY "XYZ"      - Determine the access levels which shall have immunity to warn/kick/ban
+*	SND_IMMUNITY "XYZ"      - Determine the access levels which shall have immunity to warn/ban
 *	EXACT_MATCH 1/0         - Determinates if plugin triggers on exact match, or partial speech match
 *	ADMINS_ONLY 1/0         - Determinates if only admins are allowed to play sounds
 *	DISPLAY_KEYWORDS 1/0    - Determinates if keywords are shown in chat or not
@@ -339,6 +339,10 @@
 *	- fixed:
 *		- ADMINS_ONLY setting was ignored
 *
+* v1.8.4: (06.01.2014)
+*	- fixed:
+*		- admins could get spammed with "You are muted" messages
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -451,7 +455,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.8.3"
+#define PLUGIN_VERSION		"1.8.4"
 
 new Enable_Sound[] =  "misc/woohoo.wav"   // Sound played when Sank Soounds being enabled
 new Disable_Sound[] = "misc/awwcrap.wav"  // Sound played when Sank Soounds being disabled
@@ -463,11 +467,11 @@ new Float:SndLenghtCount[33] = {0.0, ...}
 new SndOn[33] = {1, ...}
 
 new SND_WARN = 0                          // The number at which a player will get warned for playing too many sounds
-new SND_MAX = 0                           // The number at which a player will get kicked for playing too many sounds
+new SND_MAX = 0                           // The number at which a player will get muted for playing too many sounds
 new Float:SND_MAX_DUR = 0.0
 new Float:SND_DELAY = 0.0                 // Minimum delay between sounds
 new SND_MODE = 15                         // Determinates who can play and who can hear sounds (dead and alive)
-new SND_IMMUNITY = ACCESS_ADMIN           // Determine the access levels which shall have immunity to warn/kick/ban (default ACCESS_ADMIN for backwards compatability)
+new SND_IMMUNITY = ACCESS_ADMIN           // Determine the access levels which shall have immunity to warn/ban (default ACCESS_ADMIN for backwards compatability)
 new EXACT_MATCH = 1                       // Determinates if plugin triggers on exact match, or partial speech match
 new ADMINS_ONLY = 0                       // Determinates if only admins are allowed to play sounds
 new DISPLAY_KEYWORDS = 1                  // Determinates if keywords are shown in chat or not
@@ -1258,7 +1262,7 @@ public amx_sound_ban( id , level , cid )
 	if ( !player )
 		return PLUGIN_HANDLED
 	
-	if ( get_user_flags(player) & SND_IMMUNITY )
+	if ( get_user_flags(player) & (SND_IMMUNITY | ACCESS_ADMIN) )
 		return PLUGIN_HANDLED
 	
 	if ( restrict_playing_sounds[player] == -1 )
@@ -1553,14 +1557,18 @@ public HandleSay( id )
 			ArraySetArray(sData[SUB_INDEX], rand, subData)
 			ArraySetArray(soundData, ListIndex, sData)
 		}
-	}else if ( !displayQuotaExceeded(id) )
+	}else if ( allowedToPlay == RESULT_QUOTA_EXCEEDED
+		|| allowedToPlay == RESULT_QUOTA_DURATION_EXCEEDED )
 	{
-		if ( allowedToPlay == RESULT_SOUND_DELAY
-			&& obey_duration_mode != 0 )
-			client_print(id, print_chat, "Sank Sounds >> Sound is still playing ( wait %3.1f seconds )", NextSoundTime + SND_DELAY - gametime)
-		else if ( allowedToPlay != RESULT_QUOTA_EXCEEDED
-			&& allowedToPlay != RESULT_QUOTA_DURATION_EXCEEDED )
-			client_print(id, print_chat, "Sank Sounds >> Do not use sounds too often ( wait %3.1f seconds )", LastSoundTime + SND_DELAY - gametime)
+		if ( !displayQuotaExceeded(id) )
+		{
+			if ( allowedToPlay == RESULT_SOUND_DELAY
+				&& obey_duration_mode != 0 )
+				client_print(id, print_chat, "Sank Sounds >> Sound is still playing ( wait %3.1f seconds )", NextSoundTime + SND_DELAY - gametime)
+			else if ( allowedToPlay != RESULT_QUOTA_EXCEEDED
+				&& allowedToPlay != RESULT_QUOTA_DURATION_EXCEEDED )
+				client_print(id, print_chat, "Sank Sounds >> Do not use sounds too often ( wait %3.1f seconds )", LastSoundTime + SND_DELAY - gametime)
+		}
 	}
 	
 	if ( DISPLAY_KEYWORDS == 0 )
@@ -1887,8 +1895,8 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// Returns 0 if the user is allowed to say things
-// Returns 1 and mutes the user if the quota has been exceeded.
+// Returns status indicating if user is allowed to play a sound
+// or the reason why he is not
 //////////////////////////////////////////////////////////////////////////////
 isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 {
@@ -1946,7 +1954,8 @@ isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 
 displayQuotaWarning( id )
 {
-	if ( get_user_flags(id) & SND_IMMUNITY )
+	new admin_flags = get_user_flags(id)
+	if ( (admin_flags & (SND_IMMUNITY | ACCESS_ADMIN)) > 0)
 		return
 	
 	if ( SND_MAX != 0 )
@@ -1963,7 +1972,8 @@ displayQuotaWarning( id )
 
 displayQuotaExceeded( id )
 {
-	if ( get_user_flags(id) & SND_IMMUNITY )
+	new admin_flags = get_user_flags(id)
+	if ( (admin_flags & (SND_IMMUNITY | ACCESS_ADMIN)) > 0)
 		return 0
 	
 	if ( SND_MAX != 0 )
