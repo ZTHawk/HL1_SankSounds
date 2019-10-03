@@ -366,6 +366,12 @@
 *		- Some warnings not being displayed
 *		- Issue where downloading was not working for WAV files (due to "developer 1" fix)
 *
+* v1.8.9: (2019.10.03)
+*	- added:
+*		- Option to allow bots to use sounds
+*	- fixed:
+*		- Always playing first sound.
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -478,7 +484,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.8.8"
+#define PLUGIN_VERSION		"1.8.9"
 
 new Enable_Sound[] =  "sound/misc/woohoo.wav"   // Sound played when Sank Sounds being enabled
 new Disable_Sound[] = "sound/misc/awwcrap.wav"  // Sound played when Sank Sounds being disabled
