@@ -262,6 +262,12 @@
 *	- changed:
 *		- CVAR "mp_sank_sounds_obey_duration" is now a bitmask (see readme.txt)
 *
+* v1.6.4: (21.12.2008)
+*	- added:
+*		- warning for unsupported mp3 files
+*	- changed:
+*		- mp3 detection code rewritten
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -370,7 +376,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.6.3"
+#define PLUGIN_VERSION		"1.6.4"
 
 new Enable_Sound[] =	"misc/woohoo.wav"	// Sound played when Sank Soounds being enabled
 new Disable_Sound[] =	"misc/awwcrap.wav"	// Sound played when Sank Soounds being disabled
@@ -2297,20 +2303,78 @@ Float:cfg_get_wav_duration( wav_file[] )
 	return float(data_length) / ( float(hertz * bitrate) / 8.0 )
 }
 
+enum
+{
+	MP3_MPEG_VERSION_BIT1 = 8,
+	MP3_MPEG_VERSION_BIT2 = 16,
+	MP3_LAYER_BIT1 = 2,
+	MP3_LAYER_BIT2 = 4,
+	MP3_PROTECT_BIT = 1,
+	
+	MP3_BITRATE_BIT1 = 16,
+	MP3_BITRATE_BIT2 = 32,
+	MP3_BITRATE_BIT3 = 64,
+	MP3_BITRATE_BIT4 = 128,
+	MP3_BITRATE_INVALID = 15,
+	MP3_SAMPLERATE_BIT1 = 4,
+	MP3_SAMPLERATE_BIT2 = 8,
+	MP3_SAMPLERATE_INVALID = 3,
+}
+
+// bitrate info
+new const bitrate_table[] = {
+	//MPEG 2 & 2.5
+	0, 32, 48, 56,  64,  80,  96, 112, 128, 144, 160, 176, 192, 224, 256, -1,	// Layer I
+	0,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, -1,	// Layer II
+	0,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, -1,	// Layer III
+	//MPEG 1
+	0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, -1,	// Layer I
+	0, 32, 48, 56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 384, -1,	// Layer II
+	0, 32, 40, 48,  56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, -1,	// Layer III
+}
+
+// frequency info
+new const samplingrate_table[] = {
+	11025, 12000,  8000, 0,	// MPEG 2.5	// have not seen MPEG 2.5, so UNTESTED
+	   -1,    -1,    -1, 0,	// reserved
+	22050, 24000, 16000, 0,	// MPEG 2
+	44100, 48000, 32000, 0	// MPEG 1
+}
+
 Float:cfg_get_mp3_duration( mp3_file[] )
 {
 	new file = fopen(mp3_file, "rb")
 	new byte, found_header, file_pos
+	new byte2
+	
+	new mpeg_version
+	new layer
+	new mp3_bitrate
+	new mp3_samplerate
+	new result = -1
 	do
 	{
 		byte = fgetc(file)
+		if ( byte == -1 )
+			break
+		
 		++file_pos
 		if ( byte != 255 )
 			continue
 		
 		byte = fgetc(file)
-		++file_pos
-		if ( ( byte / 16 ) != 15
+		byte2 = fgetc(file)
+		result = verify_header(byte, byte2, mpeg_version, layer, mp3_bitrate, mp3_samplerate)
+		if ( result == -1 )
+		{
+			fseek(file, file_pos, SEEK_SET)
+			++file_pos
+			continue
+		}else
+			break
+		
+		/*++file_pos
+		if ( ( byte / 16 ) < 14
 			|| byte == 255 )
 			continue
 		
@@ -2321,89 +2385,86 @@ Float:cfg_get_mp3_duration( mp3_file[] )
 		{
 			// header starts with hex: FF YY XX
 			// YY must be YY modulo 16 = 15, but NOT equal 255 (mostly it is FB or F3)
-			fseek(file, file_pos, SEEK_SET);
+			fseek(file, file_pos, SEEK_SET)
 			found_header = 1
 		}else
-			++file_pos
-	}while ( !found_header )
-	
-	// position of first frame header......
-//	file_pos -= 2
-	
-	//new header_start = file_pos
-	
-	// version check MPEG 1/2... ( 0 = mpeg 2 / 1 = mpeg 1 )
-	new mpeg_version = ( ( byte % 16 ) / 4 ) / 2
-	
-	// layer check.... normally ( tested: 1 = layer 3 / 2 = layer 2; untested: 3 = layer 1 )
-	// but we make layer 3 be realy 3:
-	//    --->>> 4 - 1 = 3
-	new layer = 4 - ( ( ( ( byte % 16 ) / 4 ) % 2 ) * 2 + ( ( ( byte % 16 ) % 4 ) / 2 ) )
-	
-#if DEBUG_MODE == 1
-	log_amx("Sank Sounds >> DEBUG for file ^"%s^"", mp3_file)
-	log_amx("Sank Sounds >> byte = %i", byte)
-	log_amx("Sank Sounds >> file_pos = %i", file_pos)
-	log_amx("Sank Sounds >> mpeg_version = %i", mpeg_version)
-	log_amx("Sank Sounds >> layer = %i", layer)
-#endif
-	
-	//get next byte to read 3rd byte of header. 
-	byte = fgetc(file)
-	
-	// bitrate info
-	new const bitrate_table[] = {
-		//MPEG 2 & 2.5
-		0, 32, 48, 56,  64,  80,  96, 112, 128, 144, 160, 176, 192, 224, 256, 0,	// Layer I
-		0,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, 0,	// Layer II
-		0,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, 0,	// Layer III
-		//MPEG 1
-		0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0,	// Layer I
-		0, 32, 48, 56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 384, 0,	// Layer II
-		0, 32, 40, 48,  56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 0,	// Layer III
-	}
-#if DEBUG_MODE == 1
-	log_amx("Sank Sounds >> byte = %i", byte)
-	log_amx("Sank Sounds >> bitrate_table index = %i", (mpeg_version * ( 3 * 16 ) + ( layer - 1 ) * 16 + ( byte / 16 )))
-#endif
-	
-	new mp3_bitrate = bitrate_table[mpeg_version * ( 3 * 16 ) + ( layer - 1 ) * 16 + ( byte / 16 )]
-	
-#if DEBUG_MODE == 1
-	log_amx("Sank Sounds >> mp3_bitrate = %i", mp3_bitrate)
-#endif
-	
-	// frequency info
-//	new const frequency_table[] = {
-//		22050, 24000, 16000,	// MPEG 2
-//		44100, 48000, 32000,	// MPEG 1
-//		32000, 16000,  8000,	// MPEG 2.5	// have noot seen MPEG 2.5, so UNTESTED
-//		    0,     0,     0	// reserved
-//	}
-//	new mp3_frequency = frequency_table[mpeg_version * 3 + ( byte % 16 ) / 4]
-	
-	// padding bit
-//	new padding_bit = ( ( byte % 16 ) % 4 ) / 2
+			++file_pos*/
+	}while ( !found_header && byte != -1 )
 	
 	fclose(file)
 	
-	// all header info over..... calculating frame size.
-//	new frame_size = ( 144000 * mp3_bitrate / mp3_frequency ) + padding_bit
+	if ( byte == -1 )
+		return 0.0
 	
+	if ( mp3_bitrate == 2 )
+		log_amx("Sank Sounds >> ^"%s^" has a samplerate of %iHz. This is not supported by Half Life 1 Engine", mp3_file, samplingrate_table[mpeg_version * 4 + mp3_samplerate])
+	
+	new mpeg_version_for_bitrate = 0
+	if ( mpeg_version == 3 )
+		mpeg_version_for_bitrate = 1
+	new mp3_bitrate_kbps = bitrate_table[mpeg_version_for_bitrate * ( 3 * 16 ) + ( layer - 1 ) * 16 + mp3_bitrate]
+	
+#if DEBUG_MODE == 1
+	log_amx("Sank Sounds >> DEBUG for file ^"%s^"", mp3_file)
+	log_amx("Sank Sounds >> Data bytes = %i / %i", byte, byte2)
+	log_amx("Sank Sounds >> Header position = %i", file_pos)
+	new mpeg_version_str[10]
+	if ( mpeg_version == 0 )
+		copy(mpeg_version_str, 9, "MPEG 2.5")
+	else if ( mpeg_version == 2 )
+		copy(mpeg_version_str, 9, "MPEG 2")
+	else if ( mpeg_version == 3 )
+		copy(mpeg_version_str, 9, "MPEG 1")
+	log_amx("Sank Sounds >> MPEG version = %i / Format: %s", mpeg_version, mpeg_version_str)
+	log_amx("Sank Sounds >> Layer = %i", layer)
+	log_amx("Sank Sounds >> Bitrate = %iKbps (%i)", mp3_bitrate_kbps, mp3_bitrate)
+	
+	//mp3_samplerate = samplingrate_table[mpeg_version * 3 + ( byte % 16 ) / 4]
+	new mp3_samplerate_hz = samplingrate_table[mpeg_version * 4 + mp3_samplerate]
+	
+	log_amx("Sank Sounds >> Samplerate = %iHz (%i)", mp3_samplerate_hz, mp3_samplerate)
+#endif
 	new size_of_file = file_size(mp3_file, 0)
 	
-	//no. of frames...
-//	new frames = ( size_of_file - header_start ) / frame_size
-	
-	// MPEG 2 Layer 3 seems to have twice more frames
-//	if ( mpeg_version == 0 && layer == 3 )
-//		frames *= 2
-	
-	if ( mp3_bitrate == 0 )
+	if ( mp3_bitrate_kbps == 0 )
 		return 0.0
 	
 	//song length...
-	return float(size_of_file) / ( float(mp3_bitrate) * 1000.0 ) * 8.0
+	return float(size_of_file) / ( float(mp3_bitrate_kbps) * 1000.0 ) * 8.0
+}
+
+verify_header( header , header2 , &mpeg_version , &layer , &mp3_bitrate , &mp3_samplerate)
+{
+	// check if first 3 bits set
+	if ( header & 0xe0 != 0xe0 )
+		return -1
+	
+	layer = 4
+		- ( header & MP3_LAYER_BIT1 ) / MP3_LAYER_BIT1
+		+ ( header & MP3_LAYER_BIT2 ) / MP3_LAYER_BIT1
+	
+	if ( layer != 3 )
+		return -1
+	
+	
+	mp3_bitrate = ( header2 & MP3_BITRATE_BIT1 ) / MP3_BITRATE_BIT1
+		+ ( header2 & MP3_BITRATE_BIT2 ) / MP3_BITRATE_BIT1
+		+ ( header2 & MP3_BITRATE_BIT3 ) / MP3_BITRATE_BIT1
+		+ ( header2 & MP3_BITRATE_BIT4 ) / MP3_BITRATE_BIT1
+	
+	if ( mp3_bitrate & MP3_BITRATE_INVALID == MP3_BITRATE_INVALID )
+		return -1
+	
+	mp3_samplerate = ( header2 & MP3_SAMPLERATE_BIT1 ) / MP3_SAMPLERATE_BIT1
+		+ ( header2 & MP3_SAMPLERATE_BIT2 ) / MP3_SAMPLERATE_BIT1
+	
+	if ( mp3_samplerate & MP3_SAMPLERATE_INVALID == MP3_SAMPLERATE_INVALID )
+		return -1
+	
+	mpeg_version = ( header & MP3_MPEG_VERSION_BIT1 ) / MP3_MPEG_VERSION_BIT1
+		+ ( header & MP3_MPEG_VERSION_BIT2 ) / MP3_MPEG_VERSION_BIT1
+	
+	return 1
 }
 
 /*
