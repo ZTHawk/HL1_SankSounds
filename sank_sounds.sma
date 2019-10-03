@@ -13,7 +13,7 @@
 * Functions included in this plugin:
 *	mp_sank_sounds_download	1/0		-	turn internal download system on/off
 *	mp_sank_sounds_freezetime <x>		-	x = time in seconds to wait till first sounds are played (connect sound)
-*	mp_sank_sounds_obey_duration 1/0	-	determine if sounds may overlap or not 1 = do not overlap / 0 = overlap
+*	mp_sank_sounds_obey_duration <x>	-	determine whos sounds may overlap (bit mask) (see readme.txt)
 *	amx_sound				-	turn Sank Sounds on/off
 *	amx_sound_help				-	prints all available sounds to console
 *	amx_sound_play <dir/sound>		-	plays a specific wav/mp3/speech
@@ -255,6 +255,13 @@
 *		- no more engine, but therefore fakemeta is needed
 *		- minor code tweaks
 *
+* v1.6.3: (29.02.2008)
+*	- fixed:
+*		- runtime error if more sounds added than defined in MAX_KEYWORDS
+*		- commenting SND_JOIN and SND_EXIT (adding # or // infront of them) made the following sounds to be added to these options
+*	- changed:
+*		- CVAR "mp_sank_sounds_obey_duration" is now a bitmask (see readme.txt)
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -362,11 +369,11 @@
 
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
-new Enable_Sound[] =	"misc/woohoo.wav"		// Sound played when Sank Soounds being enabled
-new Disable_Sound[] =	"misc/awwcrap.wav"		// Sound played when Sank Soounds being disabled
+#define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
+#define PLUGIN_VERSION		"1.6.3"
 
-new plugin_author[] = "White Panther, Luke Sankey, HunteR"
-new plugin_version[] = "1.6.2"
+new Enable_Sound[] =	"misc/woohoo.wav"	// Sound played when Sank Soounds being enabled
+new Disable_Sound[] =	"misc/awwcrap.wav"	// Sound played when Sank Soounds being disabled
 
 new config_filename[128]
 
@@ -451,8 +458,8 @@ new sound_data[MAX_KEYWORDS][SOUND_DATA_BASE]
 
 public plugin_init( )
 {
-	register_plugin("Sank Sounds Plugin", plugin_version, plugin_author)
-	register_cvar("sanksounds_version", plugin_version, FCVAR_SERVER)
+	register_plugin("Sank Sounds Plugin", PLUGIN_VERSION, PLUGIN_AUTHOR)
+	register_cvar("sanksounds_version", PLUGIN_VERSION, FCVAR_SERVER)
 	
 	register_concmd("amx_sound_reset", "amx_sound_reset", ACCESS_ADMIN, " <user | all> : Resets sound quota for ^"user^", or everyone if ^"all^"")
 	register_concmd("amx_sound_add", "amx_sound_add", ACCESS_ADMIN, " <keyword> <dir/sound> : Adds a Word/Sound combo to the sound list")
@@ -609,8 +616,8 @@ public amx_sound_reset( id , level , cid )
 // file, then it is a valid parameter here. The only difference is you can
 // only specify one Sound file at a time with this command.
 //
-// Usage: admin_sound_add <keyword> <dir/sound>
-// Usage: admin_sound_add <setting> <value>
+// Usage: amx_sound_add <keyword> <dir/sound>
+// Usage: amx_sound_add <setting> <value>
 //////////////////////////////////////////////////////////////////////////////
 public amx_sound_add( id , level , cid )
 {
@@ -795,7 +802,7 @@ public amx_sound( id , level , cid )
 //////////////////////////////////////////////////////////////////////////////
 // Plays a sound to all players
 //
-// Usage: admin_sound_play <dir/sound>
+// Usage: amx_sound_play <dir/sound>
 //////////////////////////////////////////////////////////////////////////////
 public amx_sound_play( id , level , cid )
 {
@@ -821,7 +828,7 @@ public amx_sound_play( id , level , cid )
 //////////////////////////////////////////////////////////////////////////////
 // Reloads the Word/Sound combos from filename
 //
-// Usage: admin_sound_reload <filename>
+// Usage: amx_sound_reload <filename>
 //////////////////////////////////////////////////////////////////////////////
 public amx_sound_reload( id , level , cid )
 {
@@ -844,7 +851,7 @@ public amx_sound_reload( id , level , cid )
 // is not necessary to specify a Sound if you want to remove all Sounds associated
 // with that keyword
 //
-// Usage: admin_sound_remove <keyWord> <dir/sound>"
+// Usage: amx_sound_remove <keyWord> <dir/sound>"
 //////////////////////////////////////////////////////////////////////////////
 public amx_sound_remove( id , level , cid )
 {
@@ -951,7 +958,7 @@ public amx_sound_remove( id , level , cid )
 // Saves the current configuration of Word/Sound combos to filename for possible
 // reloading at a later time. You cannot overwrite the default file.
 //
-// Usage: admin_sound_write <filename>
+// Usage: amx_sound_write <filename>
 //////////////////////////////////////////////////////////////////////////////
 public amx_sound_write( id , level , cid )
 {
@@ -1081,8 +1088,8 @@ public amx_sound_write( id , level , cid )
 // Prints out Word/Sound combo matrix for debugging purposes. Kinda cool, even
 // if you're not really debugging.
 //
-// Usage: admin_sound_debug
-// Usage: admin_sound_reload <filename>
+// Usage: amx_sound_debug
+// Usage: amx_sound_reload <filename>
 //////////////////////////////////////////////////////////////////////////////
 public amx_sound_debug( id , level , cid )
 {
@@ -1335,12 +1342,16 @@ public HandleSay( id )
 	// check If player used NO sound trigger
 	if ( ListIndex == -1 )
 		return PLUGIN_CONTINUE
-	
+	new obey_duration_mode = get_pcvar_num(CVAR_obey_duration)
+	new admin_flags = get_user_flags(id)
 	new Float:gametime = get_gametime()
-	if ( gametime > NextSoundTime + SND_DELAY				// 1.  check for sound overlapping + delay time
-		|| get_user_flags(id) & ACCESS_ADMIN				// 2.  check if admin
-		|| ( get_pcvar_num(CVAR_obey_duration) == 0			// 3.  check if overlapping is allowed
-			&& gametime > LastSoundTime + SND_DELAY ) )		// 3b. or for delay time
+	if ( gametime > NextSoundTime + SND_DELAY			// 1.  check for sound overlapping + delay time
+		|| ( admin_flags & ADMIN_RCON				// 2.  check if super admin
+			&& !(obey_duration_mode & 4) )			// 2b. check if super admin have to obey duration
+		|| ( admin_flags & ACCESS_ADMIN				// 3.  check if admin
+			&& !(obey_duration_mode & 2) )			// 3b. check if admin have to obey duration
+		|| ( !(obey_duration_mode & 1)				// 4.  check if overlapping is allowed
+			&& gametime > LastSoundTime + SND_DELAY ) )	// 4b. or for delay time
 	{
 		// check if player is allowed to play sounds depending on config
 		new alive = is_user_alive(id)
@@ -1387,7 +1398,7 @@ public HandleSay( id )
 			}
 		}
 	}else if ( gametime <= NextSoundTime + SND_DELAY
-		&& get_pcvar_num(CVAR_obey_duration) == 1 )
+		&& obey_duration_mode != 0 )
 		client_print(id, print_chat, "Sank Sounds >> Sound is still playing ( wait %3.1f seconds )", NextSoundTime + SND_DELAY - gametime)
 	else
 		client_print(id, print_chat, "Sank Sounds >> Do not use sounds too often ( wait %3.1f seconds )", LastSoundTime + SND_DELAY - gametime)
@@ -1401,8 +1412,6 @@ public HandleSay( id )
 //////////////////////////////////////////////////////////////////////////////
 // Parses the sound file specified by loadfile. If loadfile is empty, then
 // it parses the default config_filename.
-//
-// Usage: admin_sound_reload <filename>
 //////////////////////////////////////////////////////////////////////////////
 parse_sound_file( loadfile[] , precache_sounds = 1 )
 {
@@ -1517,8 +1526,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 		
 		if ( ListIndex >= MAX_KEYWORDS )
 		{
-			log_amx("Sank Sounds >> Sound list truncated. Increase MAX_KEYWORDS")
-			log_amx("Sank Sounds >> Stopped parsing file ^"%s^"^n", loadfile)
+			log_amx("Sank Sounds >> Sound list truncated. Increase MAX_KEYWORDS. Stopped parsing file ^"%s^"^n", loadfile)
 			
 			break
 		}
@@ -1592,7 +1600,8 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 						break
 					}
 					
-					array_add_element(ListIndex, temp_str)
+					if ( array_add_element(ListIndex, temp_str) == 0 )
+						ListIndex = 2
 				}
 			}else
 			{
@@ -1648,16 +1657,14 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 		// Error occured so skip Word/Sound Combo
 		if ( error_code == ERROR_MAX_KEYWORDS )
 		{
-			log_amx("Sank Sounds >> Sound list truncated. Increase MAX_KEYWORDS")
-			log_amx("Sank Sounds >> Stopped parsing file ^"%s^"^n", loadfile)
+			log_amx("Sank Sounds >> Sound list truncated. Increase MAX_KEYWORDS. Stopped parsing file ^"%s^"^n", loadfile)
 			
 			break
 		}
 		
 		if ( error_code == ERROR_STRING_LENGTH )
 		{
-			log_amx("Sank Sounds >> Word or Sound is too long: ^"%s^". Length is %i but max is %i (change name/remove spaces in config or increase TOK_LENGTH)", temp_str, strlen(temp_str), TOK_LENGTH)
-			log_amx("Sank Sounds >> Skipping this word/sound combo")
+			log_amx("Sank Sounds >> Skipping this word/sound combo. Word or Sound is too long: ^"%s^". Length is %i but max is %i (change name/remove spaces in config or increase TOK_LENGTH)", temp_str, strlen(temp_str), TOK_LENGTH)
 			
 			continue
 		}
@@ -1672,8 +1679,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 		// then we should have a bigger MAX_RANDOM
 		else if ( position < strlen(strLineBuf) )
 		{
-			log_amx("Sank Sounds >> Sound list partially truncated. Increase MAX_RANDOM")
-			log_amx("Sank Sounds >> Continuing to parse file ^"%s^"^n", loadfile)
+			log_amx("Sank Sounds >> Sound list partially truncated. Increase MAX_RANDOM. Continuing to parse file ^"%s^"^n", loadfile)
 		}
 	}
 	
@@ -1690,7 +1696,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 	num_to_str(current_package, current_package_str, 3)
 	set_vaultdata("sank_sounds_current_package", current_package_str)
 	
-	++ListIndex
+	//++ListIndex
 #if ALLOW_SORT == 1
 	if ( ListIndex > 1 )
 		sort_HeapSort(ListIndex - 2)	// -2 cause first two are reserved for join/exit sounds
@@ -1745,8 +1751,7 @@ ErrorCheck( )
 	// Can't have negative delay between sounds
 	if ( SND_DELAY < 0.0 )
 	{
-		log_amx("Sank Sounds >> SND_DELAY cannot be negative")
-		log_amx("Sank Sounds >> SND_DELAY set to default value 0")
+		log_amx("Sank Sounds >> SND_DELAY cannot be negative. Setting to value: 0")
 		SND_DELAY = 0.0
 	}
 	
@@ -1754,14 +1759,14 @@ ErrorCheck( )
 	if ( SND_MAX < 0 )
 	{
 		SND_MAX = 0	// in case it was negative
-		log_amx("Sank Sounds >> SND_MAX cannot be negative. Setting to value 0")
+		log_amx("Sank Sounds >> SND_MAX cannot be negative. Setting to value: 0")
 	}
 	
 	// If SND_MAX_DUR is zero, then sounds quota is disabled. Can't have negative quota
 	if ( SND_MAX_DUR < 0.0 )
 	{
 		SND_MAX_DUR = 0.0	// in case it was negative
-		log_amx("Sank Sounds >> SND_MAX_DUR cannot be negative. Setting to value 0.0")
+		log_amx("Sank Sounds >> SND_MAX_DUR cannot be negative. Setting to value: 0.0")
 	}
 	
 	// If SND_WARN is zero, then we can't have warning every time a keyword is said,
@@ -2001,12 +2006,23 @@ array_switch_elements( element_one , element_two )
 
 array_add_element( num , keyword[] )
 {
+	new join_exit_check = ( equali(keyword, "SND_JOIN") || equali(keyword, "SND_EXIT") )
+	// if index is 0 or 1 but not the correct keyword then make sure to save in correct array position
+	if ( join_exit_check == 0
+		&& ( num == 0
+			|| num == 1 ) )
+	{
+		join_exit_check = -1
+		num = 2
+	}
+	
+	if ( join_exit_check > 0 )
+		sound_data[num][FLAGS] |= FLAG_IGNORE_AMOUNT
 	sound_data[num][ADMIN_LEVEL_BASE] = cfg_parse_access(keyword)
 	copy(sound_data[num][KEYWORD], TOK_LENGTH, keyword)
-	if ( equali(keyword, "SND_JOIN")
-		|| equali(keyword, "SND_EXIT") )
-		sound_data[num][FLAGS] |= FLAG_IGNORE_AMOUNT
 	sound_data[num][PLAY_COUNT_KEY] = 0
+	
+	return (join_exit_check == -1) ? 0 : 1
 }
 
 array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , allow_global_precache = 0 , precache_sounds = 0 , allowed_to_precache = 0 )
