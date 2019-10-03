@@ -343,6 +343,12 @@
 *	- fixed:
 *		- admins could get spammed with "You are muted" messages
 *
+* v1.8.5: (04.05.2014)
+*	- added:
+*		- support to also load files from "<MOD>_downloads" folder
+*	- fixed:
+*		- issue with ADMINS_ONLY and RCON access level
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -455,10 +461,10 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.8.4"
+#define PLUGIN_VERSION		"1.8.5"
 
-new Enable_Sound[] =  "misc/woohoo.wav"   // Sound played when Sank Soounds being enabled
-new Disable_Sound[] = "misc/awwcrap.wav"  // Sound played when Sank Soounds being disabled
+new Enable_Sound[] =  "sound/misc/woohoo.wav"   // Sound played when Sank Sounds being enabled
+new Disable_Sound[] = "sound/misc/awwcrap.wav"  // Sound played when Sank Sounds being disabled
 
 new config_filename[128]
 
@@ -1904,11 +1910,6 @@ isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 	
 	new admin_flags = get_user_flags(id)
 	
-	// check if only admins can play sounds
-	if ( ADMINS_ONLY
-		&& !(admin_flags & ACCESS_ADMIN) )
-		return RESULT_ADMINS_ONLY
-	
 	// check if super admin
 	if ( admin_flags & ADMIN_RCON )
 	{
@@ -1917,6 +1918,11 @@ isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 			return RESULT_OK
 		return RESULT_SOUND_DELAY
 	}
+	
+	// check if only admins can play sounds
+	if ( ADMINS_ONLY
+		&& !(admin_flags & ACCESS_ADMIN) )
+		return RESULT_ADMINS_ONLY
 	
 	// check if admin
 	if ( admin_flags & ACCESS_ADMIN )
@@ -2242,9 +2248,17 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 		{
 			if ( !file_exists(sound_file_name) )
 			{
-				log_amx("Sank Sounds >> Trying to load a file that dont exist. Skipping this file: ^"%s^"", sound_file_name)
-
-				return -1
+				new alt_sound_file_name[TOK_LENGTH + 1 + 10 + 32]
+				new modname[32]
+				get_modname(modname, 31)
+				formatex(alt_sound_file_name, TOK_LENGTH + 10 + 32, "../%s_downloads/%s", modname, sound_file_name)
+				if ( !file_exists(alt_sound_file_name) )
+				{
+					log_amx("Sank Sounds >> Trying to load a file that does not exist. Skipping this file: ^"%s^"", sound_file_name)
+					
+					return -1
+				}
+				copy(sound_file_name, TOK_LENGTH + 10, alt_sound_file_name);
 			}
 			
 			subData[DURATION] = _:cfg_get_duration(sound_file_name, is_mp3 ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
