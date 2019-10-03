@@ -268,6 +268,10 @@
 *	- changed:
 *		- mp3 detection code rewritten
 *
+* v1.6.5: (14.01.2009)
+*	- fixed:
+*		- wav detection for bad files
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -376,7 +380,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.6.4"
+#define PLUGIN_VERSION		"1.6.5"
 
 new Enable_Sound[] =	"misc/woohoo.wav"	// Sound played when Sank Soounds being enabled
 new Disable_Sound[] =	"misc/awwcrap.wav"	// Sound played when Sank Soounds being disabled
@@ -2253,36 +2257,48 @@ Float:cfg_get_wav_duration( wav_file[] )
 	for ( i = 0; i < 24; ++i )
 		dummy_input = fgetc(file)
 	
-	// 24th bit
+	// 24th byte
 	new hertz = fgetc(file)
-	// 25th bit
+	// 25th byte
 	hertz += fgetc(file) * 256
-	// 26th bit
+	// 26th byte
 	hertz += fgetc(file) * 256 * 256
 	
 	for ( i = 27; i < 34; ++i )
 		dummy_input = fgetc(file)
 	
-	// 34th bit
+	// 34th byte
 	new bitrate = fgetc(file)
 	
 	// bytes for data length start right after ascii "data", so search for it
 	// normally it is at 35 but also saw at 44, so just in case add bigger search area
 	new data_found
-	for ( i = 35; i < 200 && data_found < 4; ++i )
+	
+	do
 	{
 		dummy_input = fgetc(file)
 		if ( dummy_input == 'd' )
-			++data_found
+			data_found = 1
 		else if ( dummy_input == 'a'
 			&& data_found == 1 )
-			++data_found
-		else if ( dummy_input == 't' )
-			++data_found
-		else if ( dummy_input == 'a' )
-			++data_found
+			data_found = 2
+		else if ( dummy_input == 't'
+			&& data_found == 2 )
+			data_found = 3
+		else if ( dummy_input == 'a'
+			&& data_found == 3 )
+			data_found = 4
 		else
 			data_found = 0
+	}while ( dummy_input != -1 && data_found < 4 )
+	
+	if ( dummy_input == -1
+		|| hertz <= 0
+		|| bitrate <= 0
+		|| data_found != 4 )
+	{
+		fclose(file)
+		return 0.0
 	}
 	
 	// 1st byte after data
@@ -2295,10 +2311,6 @@ Float:cfg_get_wav_duration( wav_file[] )
 	data_length += fgetc(file) * 256 * 256 * 256
 	
 	fclose(file)
-	
-	if ( hertz <= 0
-		|| bitrate <= 0 )
-		return 0.0
 	
 	return float(data_length) / ( float(hertz * bitrate) / 8.0 )
 }
@@ -2319,6 +2331,8 @@ enum
 	MP3_SAMPLERATE_BIT1 = 4,
 	MP3_SAMPLERATE_BIT2 = 8,
 	MP3_SAMPLERATE_INVALID = 3,
+	MP3_PADDING_BIT = 2,
+	MP3_PRIVATE_BIT = 1,
 }
 
 // bitrate info
@@ -2333,6 +2347,7 @@ new const bitrate_table[] = {
 	0, 32, 40, 48,  56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, -1,	// Layer III
 }
 
+#if DEBUG_MODE == 1
 // frequency info
 new const samplingrate_table[] = {
 	11025, 12000,  8000, 0,	// MPEG 2.5	// have not seen MPEG 2.5, so UNTESTED
@@ -2340,6 +2355,7 @@ new const samplingrate_table[] = {
 	22050, 24000, 16000, 0,	// MPEG 2
 	44100, 48000, 32000, 0	// MPEG 1
 }
+#endif
 
 Float:cfg_get_mp3_duration( mp3_file[] )
 {
