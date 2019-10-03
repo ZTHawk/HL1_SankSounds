@@ -311,6 +311,10 @@
 *		- WAVs are not bound to <mod-dir>/sound folder anymore (config change needed unfortunately)
 *		  all sounds now need the full path (eg: haha; sound/misc/haha.wav)
 *
+* v1.7.1: (11.08.2011)
+*	- fixed:
+*		- WAVs not downloading and producing error messages
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -420,7 +424,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.7.0"
+#define PLUGIN_VERSION		"1.7.1"
 
 new Enable_Sound[] =  "misc/woohoo.wav"   // Sound played when Sank Soounds being enabled
 new Disable_Sound[] = "misc/awwcrap.wav"  // Sound played when Sank Soounds being disabled
@@ -512,6 +516,7 @@ public plugin_init( )
 {
 	register_plugin("Sank Sounds Plugin", PLUGIN_VERSION, PLUGIN_AUTHOR)
 	register_cvar("sanksounds_version", PLUGIN_VERSION, FCVAR_SERVER)
+	set_cvar_string("sanksounds_version", PLUGIN_VERSION)
 	
 	register_concmd("amx_sound_reset", "amx_sound_reset", ACCESS_ADMIN, " <user | all> : Resets sound quota for ^"user^", or everyone if ^"all^"")
 	register_concmd("amx_sound_add", "amx_sound_add", ACCESS_ADMIN, " <keyword> <dir/sound> : Adds a Word/Sound combo to the sound list")
@@ -2227,18 +2232,14 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 	{
 		new sound_file_name[TOK_LENGTH + 1 + 10]
 		new is_mp3 = ( containi(soundfile, ".mp3") != -1 )
-		/*if ( !is_mp3 )
-		{	// ".mp3" in not in the string^
-			if ( equali(soundfile, "sound/", 6) )
-				formatex(sound_file_name, TOK_LENGTH + 10, "%s", soundfile)
-			else
-				formatex(sound_file_name, TOK_LENGTH + 10, "sound/%s", soundfile)
-		}*/
+		new isWav_inSound_folder = 0
 		if ( !is_mp3 )
-		{	// ".mp3" in not in the string^
+		{	// ".mp3" in not in the string
 			if ( equali(soundfile, "sound/", 6) )
+			{
 				formatex(sound_file_name, TOK_LENGTH + 10, "%s", soundfile)
-			else
+				isWav_inSound_folder = 1
+			}else
 				formatex(sound_file_name, TOK_LENGTH + 10, "sound/../%s", soundfile)
 		}
 		else
@@ -2269,12 +2270,11 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 			&& precache_sounds == 1
 			&& allowed_to_precache )
 		{
-			if ( is_mp3 )
-				//precache_generic(soundfile)
+			if ( is_mp3
+				|| !isWav_inSound_folder )
 				engfunc(EngFunc_PrecacheGeneric, soundfile)
 			else
-				//precache_sound(soundfile)
-				engfunc(EngFunc_PrecacheSound, soundfile)
+				engfunc(EngFunc_PrecacheSound, soundfile[6])
 		}
 	}
 	
@@ -2608,7 +2608,6 @@ Float:cfg_get_mp3_duration( mp3_file[] )
 	log_amx("Sank Sounds >> Layer = %i", layer)
 	log_amx("Sank Sounds >> Bitrate = %iKbps (%i)", mp3_bitrate_kbps, mp3_bitrate)
 	
-	//mp3_samplerate = samplingrate_table[mpeg_version * 3 + ( byte % 16 ) / 4]
 	new mp3_samplerate_hz = samplingrate_table[mpeg_version * 4 + mp3_samplerate]
 	
 	log_amx("Sank Sounds >> Samplerate = %iHz (%i)", mp3_samplerate_hz, mp3_samplerate)
