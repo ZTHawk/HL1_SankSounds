@@ -349,6 +349,10 @@
 *	- fixed:
 *		- issue with ADMINS_ONLY and RCON access level
 *
+* v1.8.6: (22.05.2016)
+*	- fixed:
+*		- players could get stuck in a "spectator" mode state or being kicked if trying to play a sound with exactly TOK_LENGTH length
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -461,7 +465,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.8.5"
+#define PLUGIN_VERSION		"1.8.6"
 
 new Enable_Sound[] =  "sound/misc/woohoo.wav"   // Sound played when Sank Sounds being enabled
 new Disable_Sound[] = "sound/misc/awwcrap.wav"  // Sound played when Sank Sounds being disabled
@@ -553,7 +557,7 @@ enum _:SOUND_DATA_BASE
 }
 enum _:SOUND_DATA_SUB
 {
-	SOUND_FILE[TOK_LENGTH],
+	SOUND_FILE[TOK_LENGTH + 1],
 	Float:DURATION,
 	ADMIN_LEVEL,
 	SOUND_TYPE,
@@ -1520,7 +1524,7 @@ public HandleSay( id )
 		displayQuotaWarning(id)
 		new rand
 		new timeout
-		new playFile[TOK_LENGTH]
+		new playFile[TOK_LENGTH + 1] // SOUND_FILE has an internal length of TOK_LENGTH + 1
 		
 		// This for loop runs around until it finds a real file to play
 		// Defaults to the first Sound file, if no file is found at random.
@@ -1538,7 +1542,7 @@ public HandleSay( id )
 			// check if sound has access defined, if so only allow admins to use it
 			if ( subData[ADMIN_LEVEL] == 0
 				|| ( get_user_flags(id) & subData[ADMIN_LEVEL] ) )
-				copy(playFile, TOK_LENGTH, subData[SOUND_FILE])
+				copy(playFile, TOK_LENGTH + 1, subData[SOUND_FILE])
 		}
 		
 		if ( playFile[0] )
@@ -2284,6 +2288,7 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 	}
 	
 	copy(subData[SOUND_FILE], TOK_LENGTH, soundfile)
+	subData[SOUND_FILE][TOK_LENGTH] = 0 // ensure that string operations will terminate
 	
 	new sData[SOUND_DATA_BASE]
 	ArrayGetArray(soundData, num, sData)
