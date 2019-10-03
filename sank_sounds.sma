@@ -289,6 +289,14 @@
 *		- runtime error
 *		- if SND_JOIN or SND_JOIN was not at the beginning and more sounds were added afterwards, those new sounds overwrote previous sounds
 *
+* v1.6.6c: (30.06.2009)
+*	- fixed:
+*		- removed debug message
+*
+* v1.6.6d: (03.07.2009)
+*	- fixed:
+*		- speech files not being played
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -397,7 +405,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.6.6b"
+#define PLUGIN_VERSION		"1.6.6d"
 
 new Enable_Sound[] =	"misc/woohoo.wav"	// Sound played when Sank Soounds being enabled
 new Disable_Sound[] =	"misc/awwcrap.wav"	// Sound played when Sank Soounds being disabled
@@ -1877,6 +1885,8 @@ playsoundall( sound[] , type , split_dead_alive = 0 , sender_alive_status = 0 )
 			client_cmd(i, "mp3 play ^"%s^"", sound)
 		else if ( type == SOUND_TYPE_WAV_NOSUB )
 			client_cmd(i, "play ^"%s^"", sound)
+		else if ( type == SOUND_TYPE_SPEECH )
+			client_cmd(i, "spk %s", sound)
 		else
 			client_cmd(i, "spk ^"%s^"", sound)
 	}
