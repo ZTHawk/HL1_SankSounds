@@ -133,6 +133,12 @@
 *	- fixed:
 *		- compile error when disabling mp3 support
 *
+* v1.4.3:
+*	- fixed:
+*		- keywords without or with wrong files will not be added anymore
+*		- possible errors fixed
+*		- error with MOTD display fixed
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -216,7 +222,7 @@
 // set this to 1 to get some debug messages
 #define	DEBUG	0
 
-// turn this off to stop list from being sorted by word names
+// turn this off to stop list from being sorted by keywords in alphabetic order
 #define	ALLOW_SORT	1
 
 // Array Defines, ATTENTION: ( MAX_RANDOM + 1 ) * TOK_LENGTH < 2048 !!!
@@ -225,8 +231,8 @@
 #define TOK_LENGTH	60				// Maximum length of keyword and wav/mp3 file strings
 
 #define NUM_PER_LINE	6				// Number of words per line from amx_sound_help
-#define Enable_Sound	"misc/woohoo.wav"		// Sound played when Sank Soounds enabled
-#define Disable_Sound	"misc/awwcrap.wav"		// Sound played when Sank Soounds disabled
+new Enable_Sound[] =	"misc/woohoo.wav"		// Sound played when Sank Soounds enabled
+new Disable_Sound[] =	"misc/awwcrap.wav"		// Sound played when Sank Soounds disabled
 
 //#pragma dynamic 16384
 #pragma dynamic 65536
@@ -240,7 +246,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 new plugin_author[] = "White Panther, Luke Sankey, HunteR"
-new plugin_version[] = "1.4.2b"
+new plugin_version[] = "1.4.3"
 
 new FILENAME[128]
 
@@ -343,10 +349,23 @@ public client_disconnect( id )
 
 public plugin_precache( )
 {
-	new configpath[60]
+	new configpath[61]
 	get_configsdir(configpath, 60)
 	format(FILENAME, 127, "%s/SND-LIST.CFG", configpath) // Name of file to parse
 	parse_sound_file(FILENAME)
+	
+	new file_name[128]
+	format(file_name, 127, "sound/%s", Enable_Sound)
+	if ( file_exists(file_name) )
+		precache_sound(Enable_Sound)
+	else
+		Enable_Sound[0] = 0
+	
+	format(file_name, 127, "sound/%s", Disable_Sound)
+	if ( file_exists(file_name) )
+		precache_sound(Disable_Sound)
+	else
+		Disable_Sound[0] = 0
 }
 
 public amx_sound_reset( id , level , cid )
@@ -456,7 +475,7 @@ public amx_sound_add( id , level , cid )
 			format(file_name, TOK_LENGTH, "sound/%s", file_name)
 			if ( !file_exists(file_name) )
 			{
-				log_amx("Sank Sound Plugin >> Trying to add a file that dont exist. Not adding this file: ^"%s^"", file_name)
+				log_amx("Sank Sounds Plugin >> Trying to add a file that dont exist. Not adding this file: ^"%s^"", file_name)
 				return PLUGIN_HANDLED
 			}
 		}
@@ -483,7 +502,7 @@ public amx_sound_add( id , level , cid )
 						
 						else if( equali(Wav, Join_wavs[TOK_LENGTH*(j-1)], TOK_LENGTH) )
 						{
-							client_print(id, print_console, "Sank Sound Plugin >> ^"%s^" already exists in SND_JOIN", Wav)
+							client_print(id, print_console, "Sank Sounds Plugin >> ^"%s^" already exists in SND_JOIN", Wav)
 							return PLUGIN_HANDLED
 						}
 					}else if ( joinex == 2 )
@@ -494,7 +513,7 @@ public amx_sound_add( id , level , cid )
 						
 						else if( equali(Wav, Exit_wavs[TOK_LENGTH*(j-1)], TOK_LENGTH) )
 						{
-							client_print(id, print_console, "Sank Sound Plugin >> ^"%s^" already exists in SND_EXIT", Wav)
+							client_print(id, print_console, "Sank Sounds Plugin >> ^"%s^" already exists in SND_EXIT", Wav)
 							return PLUGIN_HANDLED
 						}
 					}else
@@ -506,7 +525,7 @@ public amx_sound_add( id , level , cid )
 						// See if this is the same as the new Wav
 						if( equali(Wav, WordWavCombo[i][TOK_LENGTH*j], TOK_LENGTH) )
 						{
-							client_print(id, print_console, "Sank Sound Plugin >> ^"%s; %s^" already exists", Word, Wav)
+							client_print(id, print_console, "Sank Sounds Plugin >> ^"%s; %s^" already exists", Word, Wav)
 							return PLUGIN_HANDLED
 						}
 					}
@@ -514,7 +533,7 @@ public amx_sound_add( id , level , cid )
 	
 				// If we reached the end, then there is no room
 				if( j >= MAX_RANDOM )
-					client_print(id, print_console, "Sank Sound Plugin >> No room for new Wav. Increase MAX_RANDOM and recompile")
+					client_print(id, print_console, "Sank Sounds Plugin >> No room for new Wav. Increase MAX_RANDOM and recompile")
 				else
 				{
 					// Word exists, but Wav is new to the list, so add entry
@@ -525,20 +544,20 @@ public amx_sound_add( id , level , cid )
 					else
 						copy(WordWavCombo[i][TOK_LENGTH*j], TOK_LENGTH, Wav)
 					
-					client_print(id, print_console, "Sank Sound Plugin >> ^"%s^" successfully added to ^"%s^"", Wav, Word)
+					client_print(id, print_console, "Sank Sounds Plugin >> ^"%s^" successfully added to ^"%s^"", Wav, Word)
 				}
 				return PLUGIN_HANDLED
 			}
 		}
 		// If we reached the end, then there is no room
 		if( i >= MAX_KEYWORDS )
-			client_print(id, print_console, "Sank Sound Plugin >> No room for new Word/Wav combo. Increase MAX_KEYWORDS and recompile")
+			client_print(id, print_console, "Sank Sounds Plugin >> No room for new Word/Wav combo. Increase MAX_KEYWORDS and recompile")
 		else
 		{
 			// Word/Wav combo is new to the list, so make a new entry
 			copy(WordWavCombo[i][TOK_LENGTH*0], TOK_LENGTH, Word)
 			copy(WordWavCombo[i][TOK_LENGTH*1], TOK_LENGTH, Wav)
-			client_print(id, print_console, "Sank Sound Plugin >> ^"%s; %s^" successfully added", Word, Wav)
+			client_print(id, print_console, "Sank Sounds Plugin >> ^"%s; %s^" successfully added", Word, Wav)
 		}
 	}
 	return PLUGIN_HANDLED
@@ -675,12 +694,12 @@ public amx_sound_remove( id , level , cid )
 					if ( joinex == 1 )
 					{
 						Join_wavs[0] = 0
-						client_print(id, print_console, "Sank Sound Plugin >> Successfully removed wavs from %s", Word)
+						client_print(id, print_console, "Sank Sounds Plugin >> Successfully removed wavs from %s", Word)
 						return PLUGIN_HANDLED
 					}else if ( joinex == 2 )
 					{
 						Exit_wavs[0] = 0
-						client_print(id, print_console, "Sank Sound Plugin >> Successfully removed wavs from %s", Word)
+						client_print(id, print_console, "Sank Sounds Plugin >> Successfully removed wavs from %s", Word)
 						return PLUGIN_HANDLED
 					}else
 					{
@@ -694,7 +713,7 @@ public amx_sound_remove( id , level , cid )
 								// Delete the last Word string
 								WordWavCombo[iCurWord][0] = 0
 								// We reached the end
-								client_print(id, print_console, "Sank Sound Plugin >> %s successfully removed", Word)
+								client_print(id, print_console, "Sank Sounds Plugin >> %s successfully removed", Word)
 								return PLUGIN_HANDLED
 							}else
 							{
@@ -748,7 +767,7 @@ public amx_sound_remove( id , level , cid )
 												// Delete the last Word string
 												WordWavCombo[iCurWord][0] = 0
 												// We reached the end
-												client_print(id, print_console, "Sank Sound Plugin >> %s successfully removed", Word)
+												client_print(id, print_console, "Sank Sounds Plugin >> %s successfully removed", Word)
 												return PLUGIN_HANDLED
 											}else
 											{
@@ -787,13 +806,13 @@ public amx_sound_remove( id , level , cid )
 						}
 					}
 					// We reached the end for this Word, and the Wav didn't exist
-					client_print(id, print_console, "Sank Sound Plugin >> %s not found", Wav)
+					client_print(id, print_console, "Sank Sounds Plugin >> %s not found", Wav)
 					return PLUGIN_HANDLED
 				}
 			}
 		}
 		// We reached the end, and the Word didn't exist
-		client_print(id, print_console, "Sank Sound Plugin >> %s not found", Word)
+		client_print(id, print_console, "Sank Sounds Plugin >> %s not found", Word)
 	}
 	return PLUGIN_HANDLED
 }
@@ -808,23 +827,20 @@ public amx_sound_write( id , level , cid )
 {
 	if ( cmd_access(id,level,cid,2) )
 	{
-		new savefile[128], TimeStamp[128], name[33], Text[TOK_LENGTH*MAX_RANDOM+1]
-		new bSuccess = 1
+		new savefile[128]
 		
-		get_user_name(id, name, 32)
 		read_argv(1, savefile, 127)
-		get_time("%H:%M:%S %A %B %d, %Y", TimeStamp, 127)
 		// If the filename is NULL, then that's bad
 		if ( strlen(savefile) == 0 )
 		{
-			client_print(id, print_console, "Sank Sound Plugin >> You must specify a filename")
+			client_print(id, print_console, "Sank Sounds Plugin >> You must specify a filename")
 			return PLUGIN_HANDLED
 		}
 		// If the filename is the same as the default FILENAME, then that's bad
 		if ( equali(savefile, FILENAME) )
 		{
-			client_print(id, print_console, "Sank Sound Plugin >> Illegal write to default sound config file")
-			client_print(id, print_console, "Sank Sound Plugin >> Specify a different filename")
+			client_print(id, print_console, "Sank Sounds Plugin >> Illegal write to default sound config file")
+			client_print(id, print_console, "Sank Sounds Plugin >> Specify a different filename")
 			return PLUGIN_HANDLED
 		}
 		
@@ -850,6 +866,11 @@ public amx_sound_write( id , level , cid )
 		doh;			misc/doh.wav;misc/doh2.wav;@misc/doh3.wav
 	
 		******************************************************************/
+		
+		new TimeStamp[128], name[33], Text[TOK_LENGTH*MAX_RANDOM+1]
+		new bSuccess = 1
+		get_user_name(id, name, 32)
+		get_time("%H:%M:%S %A %B %d, %Y", TimeStamp, 127)
 		
 		format(Text, 127, "# TimeStamp:^t^t%s", TimeStamp)
 		write_file(savefile, Text)
@@ -913,7 +934,7 @@ public amx_sound_write( id , level , cid )
 			// And loop for the next Wav
 		}
 	
-		client_print(id, print_console, "Sank Sound Plugin >> Configuration successfully written to %s", savefile)
+		client_print(id, print_console, "Sank Sounds Plugin >> Configuration successfully written to %s", savefile)
 	}
 	return PLUGIN_HANDLED
 }
@@ -1061,8 +1082,8 @@ public HandleSay( id )
 		return PLUGIN_HANDLED
 	}
 	
-	if ( get_gametime() - LastSoundTime < SND_DELAY)
-		client_print(id, print_chat, "Sank Sound Plugin >> Minimum sound delay time (%3.1f second(s)) not reached yet", SND_DELAY)
+	if ( get_gametime() - LastSoundTime < SND_DELAY )
+		client_print(id, print_chat, "Sank Sounds Plugin >> Minimum sound delay time (%3.1f second(s)) not reached yet", SND_DELAY)
 	else
 	{
 		// Remove @ from user's speech, incase non-admin is trying to impersonate real admin
@@ -1116,7 +1137,7 @@ public HandleSay( id )
 					// If this Wav was an admin-only Wav, but User is not an admin, then skip this one
 					if ( equal(playFile, "@", 1) )
 					{
-						if ( !access(id,ACCESS_ADMIN) )
+						if ( !access(id, ACCESS_ADMIN) )
 							playFile[0] = 0
 						else
 							replace(playFile, TOK_LENGTH, "@", "")
@@ -1178,10 +1199,10 @@ parse_sound_file( loadfile[] )
 	if ( file_exists(loadfile) )
 	{
 		new i, temp = 0
-		GotLine = read_file(loadfile, iLineNum, strLineBuf, MAX_RANDOM*TOK_LENGTH,temp)
+		GotLine = read_file(loadfile, iLineNum, strLineBuf, MAX_RANDOM*TOK_LENGTH, temp)
 		if ( GotLine <= 0 )
 		{
-			log_amx("Sank Sound Plugin >> Unable to read from %s file", loadfile)
+			log_amx("Sank Sounds Plugin >> Unable to read from %s file", loadfile)
 			return -1
 		}
 		// Initialize WordWavCombo[][][] array before using it
@@ -1202,7 +1223,7 @@ parse_sound_file( loadfile[] )
 		new mapname[32]
 		get_mapname(mapname, 31)
 		
-		while ( ( GotLine = read_file(loadfile, iLineNum++, strLineBuf, MAX_RANDOM*TOK_LENGTH,temp) ) > 0 )
+		while ( ( GotLine = read_file(loadfile, iLineNum++, strLineBuf, MAX_RANDOM*TOK_LENGTH, temp) ) > 0 )
 		{
 			if ( equali(strLineBuf, "package ", 8) )
 			{
@@ -1240,17 +1261,18 @@ parse_sound_file( loadfile[] )
 			
 			if ( ListIndex >= MAX_KEYWORDS )
 			{
-				log_amx("Sank Sound Plugin >> Sound list truncated. Increase MAX_KEYWORDS")
-				log_amx("Sank Sound Plugin >> Stopped parsing file ^"%s^"^n", loadfile)
+				log_amx("Sank Sounds Plugin >> Sound list truncated. Increase MAX_KEYWORDS")
+				log_amx("Sank Sounds Plugin >> Stopped parsing file ^"%s^"^n", loadfile)
 				break
 			}
 			// As long as the line isn't commented out, and isn't blank, then process it.
-			if ( !equal(strLineBuf, "#", 1) && !equal(strLineBuf, "//", 2) && ( strlen(strLineBuf) != 0 ) )
+			if ( !equal(strLineBuf, "#", 1) && !equal(strLineBuf, "//", 2) && strlen(strLineBuf) != 0 )
 			{
 				new fatal_error
 				// Take up to MAX_RANDOM Wav files for each keyWord, each separated by a ';'
 				// Right now we fill the big WadOstrings[] with the information from the file.
 				new is_wordwav_combo = 1, is_keyword_sound = 1
+				soundnum_for_keyword[ListIndex] = 0
 				for( i = 0; i <= MAX_RANDOM; i++ )
 				{
 					new temp_str[128]
@@ -1270,8 +1292,8 @@ parse_sound_file( loadfile[] )
 					// check if file length is bigger than array
 					if ( strlen(temp_str) > TOK_LENGTH )
 					{
-						log_amx("Sank Sound Plugin >> Word or Wav is too long: ^"%s^". Length is %i but max is %i (change name/remove spaces in config or increase TOK_LENGTH)", temp_str, strlen(temp_str), TOK_LENGTH)
-						log_amx("Sank Sound Plugin >> Skipping this word/wav combo")
+						log_amx("Sank Sounds Plugin >> Word or Wav is too long: ^"%s^". Length is %i but max is %i (change name/remove spaces in config or increase TOK_LENGTH)", temp_str, strlen(temp_str), TOK_LENGTH)
+						log_amx("Sank Sounds Plugin >> Skipping this word/wav combo")
 						fatal_error = 1
 						break
 					}
@@ -1303,7 +1325,7 @@ parse_sound_file( loadfile[] )
 #endif
 							if ( !file_exists(file_name) && allow_check_existence )
 							{
-								log_amx("Sank Sound Plugin >> Trying to load a file that dont exist. Skipping this file: ^"%s^"", file_name)
+								log_amx("Sank Sounds Plugin >> Trying to load a file that dont exist. Skipping this file: ^"%s^"", file_name)
 								i--
 								continue
 							}
@@ -1338,8 +1360,8 @@ parse_sound_file( loadfile[] )
 				//  then we should have a bigger MAX_RANDOM
 				if( strlen(strLineBuf) != 0 && !fatal_error )
 				{
-					log_amx("Sank Sound Plugin >> Sound list partially truncated. Increase MAX_RANDOM")
-					log_amx("Sank Sound Plugin >> Continuing to parse file ^"%s^"^n", loadfile)
+					log_amx("Sank Sounds Plugin >> Sound list partially truncated. Increase MAX_RANDOM")
+					log_amx("Sank Sounds Plugin >> Continuing to parse file ^"%s^"^n", loadfile)
 				}
 				
 				// No error occured so continue
@@ -1382,8 +1404,8 @@ parse_sound_file( loadfile[] )
 					// If it wasn't one of those essential parameters, then it should be
 					//  a Keyword/Wav combo, so we'll treat it as such by copying it from our
 					//  temporary structure into our global structure, WordWavCombo[][][]
-					else
-					{
+					else if ( soundnum_for_keyword[ListIndex] > 0 )
+					{	// we have to make sure that the keyword has at least one sound, otherwise it will not be added
 						// Now we must transfer the contents of WadOstrings[] to
 						//  our global data structure, WordWavCombo[Index][]
 						//  with a really tricky "string copy"
@@ -1391,7 +1413,8 @@ parse_sound_file( loadfile[] )
 							WordWavCombo[ListIndex][i] = WadOstrings[i]
 						
 						ListIndex++
-					}
+					}else
+						log_amx("Sank Sounds Plugin >> Found keyword without any valid sounds. Skipping this keyword: ^"%s^"", WadOstrings)
 				}
 			}
 			// Initialize variables for next time by clearing all the
@@ -1406,10 +1429,10 @@ parse_sound_file( loadfile[] )
 		
 #if DEBUG
 		// Log some info for the nosey admin
-		log_amx("Sank Sound Plugin >> Sound quota set to %i", SND_MAX)
+		log_amx("Sank Sounds Plugin >> Sound quota set to %i", SND_MAX)
 		
 		amx_sound_print_matrix(0, 0, 0)
-		server_print("Sank Sound Plugin >> Done parsing ^"%s^" file^n", loadfile)
+		server_print("Sank Sounds Plugin >> Done parsing ^"%s^" file^n", loadfile)
 #endif
 		
 		current_package++
@@ -1424,7 +1447,7 @@ parse_sound_file( loadfile[] )
 #endif
 	}else
 	{	// file exists returned false, meaning the file didn't exist
-		format(Text, 127, "Sank Sound Plugin >> Cannot find ^"%s^" file", loadfile)
+		format(Text, 127, "Sank Sounds Plugin >> Cannot find ^"%s^" file", loadfile)
 		log_amx(Text)
 		return 1
 	}
@@ -1457,12 +1480,12 @@ QuotaExceeded( id )
 		new HowManyLeft = SND_MAX - SndCount[id]
 		if ( SndCount[id] >= SND_MAX )
 		{
-			client_print(id, print_chat, "Sank Sound Plugin >> You were warned, you are muted")
+			client_print(id, print_chat, "Sank Sounds Plugin >> You were warned, you are muted")
 			return 1
 		}else if ( SndCount[id] >= SND_WARN )
 		{
-			client_print(id, print_chat, "Sank Sound Plugin >> You have almost used up your sound quota. Stop")
-			client_print(id, print_chat, "Sank Sound Plugin >> You have %d left before you get muted", HowManyLeft)
+			client_print(id, print_chat, "Sank Sounds Plugin >> You have almost used up your sound quota. Stop")
+			client_print(id, print_chat, "Sank Sounds Plugin >> You have %d left before you get muted", HowManyLeft)
 		}
 
 		// Increment their playsound count
@@ -1479,15 +1502,15 @@ ErrorCheck( )
 	// Can't have negative delay between sounds
 	if ( SND_DELAY < 0.0 )
 	{
-		log_amx("Sank Sound Plugin >> SND_DELAY cannot be negative")
-		log_amx("Sank Sound Plugin >> SND_DELAY set to default value 0")
+		log_amx("Sank Sounds Plugin >> SND_DELAY cannot be negative")
+		log_amx("Sank Sounds Plugin >> SND_DELAY set to default value 0")
 		SND_DELAY = 0.0
 	}
 	// If SND_MAX is zero, then sounds quota is disabled. Can't have negative quota
 	if ( SND_MAX < 0 )
 	{
 		SND_MAX = 0	// in case it was negative
-		log_amx("Sank Sound Plugin >> SND_MAX cannot be negative. Setting to value 0")
+		log_amx("Sank Sounds Plugin >> SND_MAX cannot be negative. Setting to value 0")
 	}
 	// If SND_WARN is zero, then we can't have warning every
 	// time a keyWord is said, so we default to 3 less than max
@@ -1502,12 +1525,12 @@ ErrorCheck( )
 		{
 			// And finally, if they want to warn after a person has been
 			// muted, that's silly, so we'll fix it.
-			log_amx("Sank Sound Plugin >> SND_WARN cannot be higher than SND_MAX")
-			log_amx("Sank Sound Plugin >> SND_WARN set to default value")
+			log_amx("Sank Sounds Plugin >> SND_WARN cannot be higher than SND_MAX")
+			log_amx("Sank Sounds Plugin >> SND_WARN set to default value")
 		}else
 		{
-			log_amx("Sank Sound Plugin >> SND_WARN cannot be set to zero")
-			log_amx("Sank Sound Plugin >> SND_WARN set to default value")
+			log_amx("Sank Sounds Plugin >> SND_WARN cannot be set to zero")
+			log_amx("Sank Sounds Plugin >> SND_WARN set to default value")
 		}
 	}
 }
@@ -1585,7 +1608,7 @@ trim_spaces( str_to_trim[] )
 print_sound_list( id , motd_msg = 0 )
 {
 	new text[256], motd_buffer[2048], ilen
-	new info_text[64] = "say <keyword>: Plays a sound. Keywords are listed below:"
+	new info_text[64] = "say < keyword >: Plays a sound. Keywords are listed below:"
 	if ( motd_msg )
 		ilen = format(motd_buffer, 2047, "<body bgcolor=#000000><font color=#FFB000><pre>%s^n", info_text)
 	else
