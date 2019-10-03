@@ -272,6 +272,10 @@
 *	- fixed:
 *		- wav detection for bad files
 *
+* v1.6.5b: (22.01.2009)
+*	- changed:
+*		- removed warning for unsupported mp3s (they are supported)
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -380,7 +384,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.6.5"
+#define PLUGIN_VERSION		"1.6.5b"
 
 new Enable_Sound[] =	"misc/woohoo.wav"	// Sound played when Sank Soounds being enabled
 new Disable_Sound[] =	"misc/awwcrap.wav"	// Sound played when Sank Soounds being disabled
@@ -2412,8 +2416,8 @@ Float:cfg_get_mp3_duration( mp3_file[] )
 	if ( byte == -1 )
 		return 0.0
 	
-	if ( mp3_bitrate == 2 )
-		log_amx("Sank Sounds >> ^"%s^" has a samplerate of %iHz. This is not supported by Half Life 1 Engine", mp3_file, samplingrate_table[mpeg_version * 4 + mp3_samplerate])
+	//if ( mp3_bitrate == 2 )
+	//	log_amx("Sank Sounds >> ^"%s^" has a samplerate of %iHz. This is not supported by Half Life 1 Engine", mp3_file, samplingrate_table[mpeg_version * 4 + mp3_samplerate])
 	
 	new mpeg_version_for_bitrate = 0
 	if ( mpeg_version == 3 )
