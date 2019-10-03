@@ -121,7 +121,7 @@
 *		- ability to ban people from using sounds (only for current map) ( amx_sound_ban <player> <1/0 OR on/off> )
 *	- changed:
 *		- precache method changed
-*		- all keywords are now stored into buffer, even of those sounds that are not precached
+*		- all keywords are now stored into buffer, even those sounds that are not precached
 *		- code improvements
 *
 * v1.4.1:
@@ -241,6 +241,20 @@
 *		- sounds when enabling and disabling Sank Sounds are not precached anymore ( hard coded )
 *		- many code improvements
 *
+* v1.6.2: (16.01.2008)
+*	- fixed:
+*		- removed debug message
+*		- admins are not included in overlapping check anymore
+*		- non admins could see sounds that are for admins only
+*		- bug when adding and removing sounds ingame to list (wierd keywords and sounds)
+*	- added:
+*		- "PLAY_COUNT_KEY" and "PLAY_COUNT" to data structure to count how often a key and sound has been used
+*		- messages for players when enabling/disabling sounds and if players have to wait cause of delay
+*	- changed:
+*		- sank sounds is now precaching sounds after plugin init (fakemeta modul needed)
+*		- no more engine, but therefore fakemeta is needed
+*		- minor code tweaks
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -327,7 +341,7 @@
 
 #include <amxmodx>
 #include <amxmisc>
-#include <engine>	// backwards campatability, amxX 1.75 does not need it anymore
+#include <fakemeta>
 
 // set this to 1 to get some debug messages
 #define	DEBUG_MODE	0
@@ -352,7 +366,7 @@ new Enable_Sound[] =	"misc/woohoo.wav"		// Sound played when Sank Soounds being 
 new Disable_Sound[] =	"misc/awwcrap.wav"		// Sound played when Sank Soounds being disabled
 
 new plugin_author[] = "White Panther, Luke Sankey, HunteR"
-new plugin_version[] = "1.6.0"
+new plugin_version[] = "1.6.2"
 
 new config_filename[128]
 
@@ -383,7 +397,8 @@ new sound_quota_steamids[33][60]
 
 new motd_sound_list_address[128]
 
-enum {
+enum
+{
 	PARSE_SND_MAX,
 	PARSE_SND_MAX_DUR,
 	PARSE_SND_WARN,
@@ -395,33 +410,39 @@ enum {
 	PARSE_KEYWORD
 }
 
-enum {
+enum
+{
 	ERROR_NONE,
 	ERROR_MAX_KEYWORDS,
 	ERROR_STRING_LENGTH
 }
 
-enum {
+enum
+{
 	FLAG_IGNORE_AMOUNT = 1
 }
 
-enum {
+enum
+{
 	SOUND_TYPE_SPEECH,
 	SOUND_TYPE_MP3,
 	SOUND_TYPE_WAV,
 	SOUND_TYPE_WAV_NOSUB
 }
 
-enum SOUND_DATA_BASE {
+enum SOUND_DATA_BASE
+{
 	KEYWORD[TOK_LENGTH],
 	ADMIN_LEVEL_BASE,
 	SOUND_AMOUNT,
 	FLAGS,
+	PLAY_COUNT_KEY,
 	
 	KEY_SOUNDS[BUFFER_LEN],
 	Float:DURATION[MAX_RANDOM],
 	ADMIN_LEVEL[MAX_RANDOM],
 	SOUND_TYPE[MAX_RANDOM],
+	PLAY_COUNT[MAX_RANDOM],
 	
 	SOUND_DATA_BASE_END
 }
@@ -441,7 +462,7 @@ public plugin_init( )
 	register_concmd("amx_sound_reload", "amx_sound_reload", ACCESS_ADMIN, " : Reloads config file. Filename is optional. If no filename, default is loaded")
 	register_concmd("amx_sound_remove", "amx_sound_remove", ACCESS_ADMIN, " <keyword> <dir/sound> : Removes a Word/Sound combo from the sound list. Must use quotes")
 	register_concmd("amx_sound_write", "amx_sound_write", ACCESS_ADMIN, " :  Writes current sound configuration to file")
-	register_concmd("amx_sound_debug", "amx_sound_print_matrix", ACCESS_ADMIN, "prints the whole Word/Sound combo list")
+	register_concmd("amx_sound_debug", "amx_sound_debug", ACCESS_ADMIN, "prints the whole Word/Sound combo list")
 	register_concmd("amx_sound_ban", "amx_sound_ban", ACCESS_ADMIN, " <name or #userid>: Bans player from using sounds for current map")
 	register_concmd("amx_sound_unban", "amx_sound_unban", ACCESS_ADMIN, " <name or #userid>: Unbans player from using sounds for current map")
 	
@@ -459,6 +480,21 @@ public plugin_init( )
 public plugin_cfg( )
 {
 	get_cvar_string("mp_sank_sounds_motd_address", motd_sound_list_address, 127)
+	
+	new configpath[61]
+	get_configsdir(configpath, 60)
+	format(config_filename, 127, "%s/SND-LIST.CFG", configpath)	// Name of file to parse
+	
+	// check if file in capital letter exists
+	// otherwise make it all lowercase and try to load it
+	if ( file_exists(config_filename) )
+	{
+		parse_sound_file(config_filename)
+	}else
+	{
+		strtolower(config_filename)
+		parse_sound_file(config_filename)
+	}
 }
 
 public client_putinserver( id )
@@ -496,14 +532,11 @@ public client_putinserver( id )
 	new playFile[TOK_LENGTH]
 	copy(playFile, TOK_LENGTH, sound_data[0][KEY_SOUNDS][TOK_LENGTH * rand])
 	
-	server_print("ID = %i / flags = %i / lvl needed %i / result = %i", id, get_user_flags(id), sound_data[0][ADMIN_LEVEL][rand], (get_user_flags(id) & sound_data[0][ADMIN_LEVEL][rand]))
-	
 	if ( sound_data[0][ADMIN_LEVEL][rand] != 0
 		&& !(get_user_flags(id) & sound_data[0][ADMIN_LEVEL][rand]) )
 		return
 	
-	new type = playFile[0] == '^"' ? SOUND_TYPE_SPEECH : ( playFile[strlen(playFile) - 1] == '3' ? SOUND_TYPE_MP3 : ( contain(playFile, "/") != -1 ? SOUND_TYPE_WAV : SOUND_TYPE_WAV_NOSUB) )
-	playsoundall(playFile, type)
+	playsoundall(playFile, sound_data[0][SOUND_TYPE][rand])
 	
 	Join_exit_SoundTime = gametime + sound_data[0][DURATION][rand]
 	if ( NextSoundTime < Join_exit_SoundTime )
@@ -533,31 +566,11 @@ public client_disconnect( id )
 		&& !(get_user_flags(id) & sound_data[1][ADMIN_LEVEL][rand]) )
 		return
 		
-	new type = playFile[0] == '^"' ? SOUND_TYPE_SPEECH : ( playFile[strlen(playFile) - 1] == '3' ? SOUND_TYPE_MP3 : ( contain(playFile, "/") != -1 ? SOUND_TYPE_WAV : SOUND_TYPE_WAV_NOSUB) )
-	playsoundall(playFile, type)
+	playsoundall(playFile, sound_data[1][SOUND_TYPE][rand])
 	
 	Join_exit_SoundTime = gametime + sound_data[1][DURATION][rand]
 	if ( NextSoundTime < Join_exit_SoundTime )
 		NextSoundTime = Join_exit_SoundTime
-}
-
-public plugin_precache( )
-{
-	new configpath[61]
-	get_configsdir(configpath, 60)
-	format(config_filename, 127, "%s/SND-LIST.CFG", configpath)	// Name of file to parse
-	
-	// check if file in capital letter exists
-	// otherwise make it all lowercase and try to load it
-	if ( file_exists(config_filename) )
-	{
-		//parse_sound_file(config_filename)
-		parse_sound_file(config_filename)
-	}else
-	{
-		strtolower(config_filename)
-		parse_sound_file(config_filename)
-	}
 }
 
 public amx_sound_reset( id , level , cid )
@@ -871,16 +884,19 @@ public amx_sound_remove( id , level , cid )
 		// If no Sound was specified, then remove the whole Word's entry
 		if ( strlen(Sound) == 0 )
 		{
+			// special check for join / exit keywords
 			if ( iCurWord < 2 )
 			{
-				// safe join / exit keyword
+				// safe join / exit data
 				new temp_char = sound_data[iCurWord][KEYWORD][0]
+				new temp_flag = sound_data[iCurWord][FLAGS]
 				
 				// Delete the last data
 				array_clear_element(iCurWord)
 				
-				// restore keyword
+				// restore data
 				sound_data[iCurWord][KEYWORD][0] = temp_char
+				sound_data[iCurWord][FLAGS] = temp_flag
 				
 				// We reached the end
 				client_print(id, print_console, "Sank Sounds >> %s successfully cleared", Word)
@@ -1068,7 +1084,7 @@ public amx_sound_write( id , level , cid )
 // Usage: admin_sound_debug
 // Usage: admin_sound_reload <filename>
 //////////////////////////////////////////////////////////////////////////////
-public amx_sound_print_matrix( id , level , cid )
+public amx_sound_debug( id , level , cid )
 {
 	if ( !cmd_access(id, level, cid, 1)
 		&& id > 0 )
@@ -1122,9 +1138,9 @@ public amx_sound_print_matrix( id , level , cid )
 		new access_level[32]
 		get_flags(sound_data[i][ADMIN_LEVEL_BASE], access_level, 31)
 		if ( id )
-			client_print(id, print_console, "^n[%d] ^"%s^" with %d sound%s and level ^"%s^"", i - 2, sound_data[i][KEYWORD], sound_data[i][SOUND_AMOUNT], sound_data[i][SOUND_AMOUNT] > 1 ? "s" : "", access_level)
+			client_print(id, print_console, "^n[%d] ^"%s^" with %d sound%s and level ^"%s^" (played: %d)", i - 2, sound_data[i][KEYWORD], sound_data[i][SOUND_AMOUNT], sound_data[i][SOUND_AMOUNT] > 1 ? "s" : "", access_level, sound_data[i][PLAY_COUNT_KEY])
 		else
-			server_print("^n[%d] ^"%s^" with %d sound%s and level ^"%s^"", i - 2, sound_data[i][KEYWORD], sound_data[i][SOUND_AMOUNT], sound_data[i][SOUND_AMOUNT] > 1 ? "s" : "", access_level)
+			server_print("^n[%d] ^"%s^" with %d sound%s and level ^"%s^" (played: %d)", i - 2, sound_data[i][KEYWORD], sound_data[i][SOUND_AMOUNT], sound_data[i][SOUND_AMOUNT] > 1 ? "s" : "", access_level, sound_data[i][PLAY_COUNT_KEY])
 		for( j = 0; j < MAX_RANDOM; ++j )
 		{
 			if ( strlen(sound_data[i][KEY_SOUNDS][j * TOK_LENGTH]) == 0 )
@@ -1132,9 +1148,9 @@ public amx_sound_print_matrix( id , level , cid )
 			
 			get_flags(sound_data[i][ADMIN_LEVEL][j], access_level, 31)
 			if ( id )
-				client_print(id, print_console, " ^"%s^" - time: %5.2f - admin level ^"%s^"", sound_data[i][KEY_SOUNDS][j * TOK_LENGTH], sound_data[i][DURATION][j], access_level)
+				client_print(id, print_console, " ^"%s^" - time: %5.2f - admin level ^"%s^" (played: %d)", sound_data[i][KEY_SOUNDS][j * TOK_LENGTH], sound_data[i][DURATION][j], access_level, sound_data[i][PLAY_COUNT][j])
 			else
-				server_print(" ^"%s^" - time: %5.2f - admin level ^"%s^"", sound_data[i][KEY_SOUNDS][j * TOK_LENGTH], sound_data[i][DURATION][j], access_level)
+				server_print(" ^"%s^" - time: %5.2f - admin level ^"%s^" (played: %d)", sound_data[i][KEY_SOUNDS][j * TOK_LENGTH], sound_data[i][DURATION][j], access_level, sound_data[i][PLAY_COUNT][j])
 		}
 	}
 	
@@ -1269,14 +1285,20 @@ public HandleSay( id )
 		{
 			if ( Speech[7] == 'o'
 				&& Speech[8] == 'n' )
+			{
 				SndOn[id] = 1
-			else if ( Speech[7] == 'o'
+				client_print(id, print_chat, "Sank Sounds >> You will hear all sounds again")
+			}else if ( Speech[7] == 'o'
 				&& Speech[8] == 'f'
 				&& Speech[9] == 'f'
 				&& Speech[10] == 0 )
+			{
 				SndOn[id] = 0
-			else if ( Speech[7] == 0 )
+				client_print(id, print_chat, "Sank Sounds >> I will stop playing sounds for you")
+			}else if ( Speech[7] == 0 )
 				print_sound_list(id, 1)
+			else
+				return PLUGIN_CONTINUE
 			
 			return PLUGIN_HANDLED
 		}else if ( Speech[6] == 'l'
@@ -1316,9 +1338,9 @@ public HandleSay( id )
 	
 	new Float:gametime = get_gametime()
 	if ( gametime > NextSoundTime + SND_DELAY				// 1.  check for sound overlapping + delay time
-		|| ( get_pcvar_num(CVAR_obey_duration) == 0			// 2.  check if overlapping is allowed
-			&& ( ( get_user_flags(id) & ACCESS_ADMIN )		// 2a. check further if admin
-				|| gametime > LastSoundTime + SND_DELAY ) ) )	// 2b. or for delay time
+		|| get_user_flags(id) & ACCESS_ADMIN				// 2.  check if admin
+		|| ( get_pcvar_num(CVAR_obey_duration) == 0			// 3.  check if overlapping is allowed
+			&& gametime > LastSoundTime + SND_DELAY ) )		// 3b. or for delay time
 	{
 		// check if player is allowed to play sounds depending on config
 		new alive = is_user_alive(id)
@@ -1355,6 +1377,10 @@ public HandleSay( id )
 				++SndCount[id]
 				SndLenghtCount[id] += sound_data[ListIndex][DURATION][rand]
 				
+				// increment counter
+				++sound_data[ListIndex][PLAY_COUNT_KEY]
+				++sound_data[ListIndex][PLAY_COUNT][rand]
+				
 				playsoundall(playFile, sound_data[ListIndex][SOUND_TYPE][rand], SND_MODE & 16, alive)
 				
 				LastSoundTime = gametime
@@ -1363,6 +1389,8 @@ public HandleSay( id )
 	}else if ( gametime <= NextSoundTime + SND_DELAY
 		&& get_pcvar_num(CVAR_obey_duration) == 1 )
 		client_print(id, print_chat, "Sank Sounds >> Sound is still playing ( wait %3.1f seconds )", NextSoundTime + SND_DELAY - gametime)
+	else
+		client_print(id, print_chat, "Sank Sounds >> Do not use sounds too often ( wait %3.1f seconds )", LastSoundTime + SND_DELAY - gametime)
 	
 	if ( DISPLAY_KEYWORDS == 0 )
 		return PLUGIN_HANDLED
@@ -1813,28 +1841,21 @@ print_sound_list( id , motd_msg = 0 )
 			break
 		
 		// check if player can see admin sounds
-		j += 1
+		++j
 		new found_stricted = 0
-		if ( equal(sound_data[i][KEYWORD], "@", 1) )
-		{
-			if ( get_user_flags(id) & ACCESS_ADMIN )
-			{
-				if ( motd_msg )
-					ilen += format(motd_buffer[ilen], 2047 - ilen, "%s", sound_data[i][KEYWORD])
-				else
-					add(text, 255, sound_data[i][KEYWORD])
-			}else
-			{
-				j -= 1
-				found_stricted = 1
-			}
-		}else
+		if ( sound_data[i][ADMIN_LEVEL_BASE] == 0
+			|| get_user_flags(id) & sound_data[i][ADMIN_LEVEL_BASE] )
 		{
 			if ( motd_msg )
 				ilen += format(motd_buffer[ilen], 2047 - ilen, "%s", sound_data[i][KEYWORD])
 			else
 				add(text, 255, sound_data[i][KEYWORD])
+		}else
+		{
+			--j
+			found_stricted = 1
 		}
+		
 		if ( !found_stricted )
 		{
 			if ( j % NUM_PER_LINE == NUM_PER_LINE - 1 )
@@ -1931,7 +1952,7 @@ array_switch_elements( element_one , element_two )
 	new i
 	new temp_sounds[BUFFER_LEN]
 	new temp_keyword[TOK_LENGTH]
-	new temp_int, Float:temp_float, temp_access, temp_access_base, temp_type, temp_flags
+	new temp_int, Float:temp_float, temp_access, temp_access_base, temp_type, temp_flags, temp_play_count
 	
 	copy(temp_keyword, TOK_LENGTH, sound_data[element_one][KEYWORD])
 	for ( i = 0; i < BUFFER_LEN; ++i )
@@ -1939,6 +1960,7 @@ array_switch_elements( element_one , element_two )
 	temp_int = sound_data[element_one][SOUND_AMOUNT]
 	temp_access_base = sound_data[element_one][ADMIN_LEVEL_BASE]
 	temp_flags = sound_data[element_one][FLAGS]
+	temp_play_count = sound_data[element_one][PLAY_COUNT_KEY]
 	
 	copy(sound_data[element_one][KEYWORD], TOK_LENGTH, sound_data[element_two][KEYWORD])
 	for ( i = 0; i < BUFFER_LEN; ++i )
@@ -1946,6 +1968,7 @@ array_switch_elements( element_one , element_two )
 	sound_data[element_one][SOUND_AMOUNT] = sound_data[element_two][SOUND_AMOUNT]
 	sound_data[element_one][ADMIN_LEVEL_BASE] = sound_data[element_two][ADMIN_LEVEL_BASE]
 	sound_data[element_one][FLAGS] = sound_data[element_two][FLAGS]
+	sound_data[element_one][PLAY_COUNT_KEY] = sound_data[element_two][PLAY_COUNT_KEY]
 	
 	copy(sound_data[element_two][KEYWORD], TOK_LENGTH, temp_keyword)
 	for ( i = 0; i < BUFFER_LEN; ++i )
@@ -1953,6 +1976,7 @@ array_switch_elements( element_one , element_two )
 	sound_data[element_two][SOUND_AMOUNT] = temp_int
 	sound_data[element_two][ADMIN_LEVEL_BASE] = temp_access_base
 	sound_data[element_two][FLAGS] = temp_flags
+	sound_data[element_two][PLAY_COUNT_KEY] = temp_play_count
 	
 	for ( i = 0; i < MAX_RANDOM; ++i )
 	{
@@ -1967,6 +1991,10 @@ array_switch_elements( element_one , element_two )
 		temp_type = sound_data[element_one][SOUND_TYPE][i]
 		sound_data[element_one][SOUND_TYPE][i] = sound_data[element_two][SOUND_TYPE][i]
 		sound_data[element_two][SOUND_TYPE][i] = temp_type
+		
+		temp_play_count = sound_data[element_one][PLAY_COUNT][i]
+		sound_data[element_one][PLAY_COUNT][i] = sound_data[element_two][PLAY_COUNT][i]
+		sound_data[element_two][PLAY_COUNT][i] = temp_play_count
 	}
 }
 #endif
@@ -1978,12 +2006,14 @@ array_add_element( num , keyword[] )
 	if ( equali(keyword, "SND_JOIN")
 		|| equali(keyword, "SND_EXIT") )
 		sound_data[num][FLAGS] |= FLAG_IGNORE_AMOUNT
+	sound_data[num][PLAY_COUNT_KEY] = 0
 }
 
 array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , allow_global_precache = 0 , precache_sounds = 0 , allowed_to_precache = 0 )
 {
 	sound_data[num][ADMIN_LEVEL][elem] = cfg_parse_access(soundfile)
 	sound_data[num][SOUND_TYPE][elem] = soundfile[0] == '^"' ? SOUND_TYPE_SPEECH : ( soundfile[strlen(soundfile) - 1] == '3' ? SOUND_TYPE_MP3 : ( contain(soundfile, "/") != -1 ? SOUND_TYPE_WAV : SOUND_TYPE_WAV_NOSUB ) )
+	sound_data[num][PLAY_COUNT][elem] = 0
 	
 	// check if not speech sounds
 	if ( soundfile[0] != '^"' )
@@ -2020,9 +2050,11 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 			&& allowed_to_precache )
 		{
 			if ( is_mp3 )
-				precache_generic(soundfile)
+				//precache_generic(soundfile)
+				engfunc(EngFunc_PrecacheGeneric, soundfile)
 			else
-				precache_sound(soundfile)
+				//precache_sound(soundfile)
+				engfunc(EngFunc_PrecacheSound, soundfile)
 		}
 	}
 	
@@ -2034,10 +2066,12 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 
 array_clear_element( index )
 {
-	sound_data[index][KEYWORD][0] = 0
+	for ( new i = 0; i < TOK_LENGTH; ++i )
+		sound_data[index][KEYWORD][i] = 0
 	sound_data[index][SOUND_AMOUNT] = 0
 	sound_data[index][ADMIN_LEVEL_BASE] = 0
 	sound_data[index][FLAGS] = 0
+	sound_data[index][PLAY_COUNT_KEY] = 0
 	
 	for ( new i = 0; i < MAX_RANDOM; ++i )
 		array_clear_inner_element(index, i)
@@ -2045,10 +2079,12 @@ array_clear_element( index )
 
 array_clear_inner_element( index , elem )
 {
-	sound_data[index][KEY_SOUNDS][TOK_LENGTH * elem] = 0
+	for ( new i = 0; i < TOK_LENGTH; ++i )
+		sound_data[index][KEY_SOUNDS][TOK_LENGTH * elem + i] = 0
 	sound_data[index][DURATION][elem] = _:0.0
 	sound_data[index][ADMIN_LEVEL][elem] = 0
 	sound_data[index][SOUND_TYPE][elem] = 0
+	sound_data[index][PLAY_COUNT][elem] = 0
 }
 
 array_copy_element( dest , source )
@@ -2057,6 +2093,7 @@ array_copy_element( dest , source )
 	sound_data[dest][SOUND_AMOUNT] = sound_data[source][SOUND_AMOUNT]
 	sound_data[dest][ADMIN_LEVEL_BASE] = sound_data[source][ADMIN_LEVEL_BASE]
 	sound_data[dest][FLAGS] = sound_data[source][FLAGS]
+	sound_data[dest][PLAY_COUNT_KEY] = sound_data[source][PLAY_COUNT_KEY]
 	
 	for ( new i = 0; i < MAX_RANDOM; ++i )
 		array_copy_inner_elements(dest, i, source, i)
@@ -2068,6 +2105,7 @@ array_copy_inner_elements( array1 , elem1 , array2 , elem2 )
 	sound_data[array1][DURATION][elem1] = _:sound_data[array2][DURATION][elem2]
 	sound_data[array1][ADMIN_LEVEL][elem1] = sound_data[array2][ADMIN_LEVEL][elem2]
 	sound_data[array1][SOUND_TYPE][elem1] = sound_data[array2][SOUND_TYPE][elem2]
+	sound_data[array1][PLAY_COUNT][elem1] = sound_data[array2][PLAY_COUNT][elem2]
 }
 
 array_remove( index )
