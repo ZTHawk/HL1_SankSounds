@@ -7,42 +7,44 @@
 * players from playing sounds.
 *
 * Credits:
-*	- Luke Sankey				->	original author
-*	- HunteR				->	modifications
+*	- Luke Sankey           -> original author
+*	- HunteR                -> modifications
 *
 * Functions included in this plugin:
-*	mp_sank_sounds_download	1/0		-	turn internal download system on/off
-*	mp_sank_sounds_freezetime <x>		-	x = time in seconds to wait till first sounds are played (connect sound)
-*	mp_sank_sounds_obey_duration <x>	-	determine whos sounds may overlap (bit mask) (see readme.txt)
-*	amx_sound				-	turn Sank Sounds on/off
-*	amx_sound_help				-	prints all available sounds to console
-*	amx_sound_play <dir/sound>		-	plays a specific wav/mp3/speech
-*	amx_sound_add <keyword> <dir/sound>	-	adds a word/wav/mp3/speech
-*	amx_sound_reload <filename>		-	reload your snd-list.cfg or custom .cfg
-*	amx_sound_remove <keyword> <dir/sound>	-	remove a word/wav/mp3
-*	amx_sound_write <filename>		-	write all settings to custom .cfg
-*	amx_sound_reset <player>		-	resets quota for specified player
-*	amx_sound_debug				-	prints debugs (debug mode must be on, see define below)
-*	amx_sound_ban <player>			-	bans player from using sounds for current map
-*	amx_sound_unban <player>		-	unbans player from using sounds for current map
+*	mp_sank_sounds_download	1/0            - turn internal download system on/off
+*	mp_sank_sounds_freezetime <x>          - x = time in seconds to wait till first sounds are played (connect sound)
+*	mp_sank_sounds_obey_duration <x>       - determine whos sounds may overlap (bit mask) (see readme.txt)
+*	amx_sound                              - turn Sank Sounds on/off
+*	amx_sound_help                         - prints all available sounds to console
+*	amx_sound_play <dir/sound>             - plays a specific wav/mp3/speech
+*	amx_sound_add <keyword> <dir/sound>    - adds a word/wav/mp3/speech
+*	amx_sound_reload <filename>           - reload your snd-list.cfg or custom .cfg
+*	amx_sound_remove <keyword> <dir/sound> - remove a word/wav/mp3
+*	amx_sound_write <filename>             - write all settings to custom .cfg
+*	amx_sound_reset <player>               - resets quota for specified player
+*	amx_sound_debug                        - prints debugs (debug mode must be on, see define below)
+*	amx_sound_ban <player>                 - bans player from using sounds for current map
+*	amx_sound_unban <player>               - unbans player from using sounds for current map
+*	amx_sound_top <x>                      - shows the top <x> most played keywords (leave <x> away for top 10)
 *
 * Config file settings:
-*	SND_WARN 				- 	The number at which a player will get warned for playing too many sounds each map
-*	SND_MAX					-	The number at which a player will get muted for playing too many sounds each map
-*	SND_MAX_DUR				-	The maximum amount of seconds a player can play sounds each map (float )
-*	SND_JOIN				-	The Sounds to play when a person joins the game
-*	SND_EXIT				-	The Sounds to play when a person exits the game
-*	SND_DELAY				-	Minimum delay between sounds (float)
-*	SND_MODE XX				-	Determinates who can play and who can hear sounds (see readme.txt for details)
-*	EXACT_MATCH 1/0				-	Determinates if plugin triggers on exact match, or partial speech match
-*	ADMINS_ONLY 1/0				-	Determinates if only admins are allowed to play sounds
-*	DISPLAY_KEYWORDS 1/0			-	Determinates if keywords are shown in chat or not
+*	SND_WARN                - The number at which a player will get warned for playing too many sounds each map
+*	SND_MAX                 - The number at which a player will get muted for playing too many sounds each map
+*	SND_MAX_DUR             - The maximum amount of seconds a player can play sounds each map (float )
+*	SND_JOIN                - The Sounds to play when a person joins the game
+*	SND_EXIT                - The Sounds to play when a person exits the game
+*	SND_DELAY               - Minimum delay between sounds (float)
+*	SND_MODE XX             - Determinates who can play and who can hear sounds (see readme.txt for details)
+*	SND_IMMUNITY "XYZ"      - Determine the access levels which shall have immunity to warn/kick/ban
+*	EXACT_MATCH 1/0         - Determinates if plugin triggers on exact match, or partial speech match
+*	ADMINS_ONLY 1/0         - Determinates if only admins are allowed to play sounds
+*	DISPLAY_KEYWORDS 1/0    - Determinates if keywords are shown in chat or not
 *
 * Commands available for each player:
-*	amx_sound_help				-	prints all available sounds to console
-*	say "/soundson"				-	now the player can hear sounds again
-*	say "/soundsoff"			-	player disables ability to hear sounds
-*	say "/sounds"				-	shows a list of all sounds
+*	amx_sound_help          -    prints all available sounds to console
+*	say "/soundson"         -    now the player can hear sounds again
+*	say "/soundsoff"        -    player disables ability to hear sounds
+*	say "/sounds"           -    shows a list of all sounds
 *
 * ported to Amx Mod X by White Panther
 *
@@ -297,13 +299,25 @@
 *	- fixed:
 *		- speech files not being played
 *
+* v1.7.0: (08.08.2011)
+*	- added:
+*		- further checks for bad configfiles
+*		- new option SND_IMMUNITY (defines all levels that shall get immunity)
+*		- info when used last sound
+*		- amx_sound_top <x> shows the top <x> (default 10) most played keywords during current map
+*		- using keywords followed by a ! (eg: haha!) will play the sound bound to a location (WAVs only)
+*		  you can move away from the sound. NO config change needed
+*	- changed:
+*		- WAVs are not bound to <mod-dir>/sound folder anymore (config change needed unfortunately)
+*		  all sounds now need the full path (eg: haha; sound/misc/haha.wav)
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
 *		but if u disable the internal download system u can use as many sounds as the plugin can handle
 *		(max should be over 100000 sounds (depending on the Array Defines ), BUT the plugin speed
 *		is another question with thousands of sounds ;) )
-*	
+*
 *	b) File has to look like this:
 *		SND_MAX;		20
 *		SND_MAX_DUR;		180.0
@@ -312,10 +326,11 @@
 *		SND_EXIT;		misc/comeagain.wav
 *		SND_DELAY;		0.0
 *		SND_MODE;		15
+*		SND_IMMUNITY;		"l"
 *		EXACT_MATCH;		1
 *		ADMINS_ONLY;		0
 *		DISPLAY_KEYWORDS;	1
-*	
+*
 *		# Word/Sound combinations:
 *		crap;			misc/awwcrap.Wav;misc/awwcrap2.wav
 *		woohoo;			misc/woohoo.wav
@@ -324,22 +339,22 @@
 *		doh;			misc/doh.wav;misc/doh2.wav;@misc/doh3.wav
 *		mp3;			sound/mymp3.mp3;music/mymp3s/number2.mp3;mainfolder.mp3
 *		target;			"target destroyed"
-*		
+*
 *		mapname TESTMAP
 *		testmap;		misc/doh.wav
 *		mapname TESTMAP2
 *		testmap2;		misc/haha.wav;sound/mymp3.mp3
 *		testmap3;		misc/hi.wav
-*		
+*
 *		package 1
 *		haha2;			misc/haha.wav
 *		doh3;			misc/doh3.wav
 *		package 2
 *		hi;			misc/hi.wav
-*		
+*
 *		modspecific
 *		<keyword>;		<location>/<name>.wav
-*		
+*
 *		Follow these instructions
 *		wavs:
 *			- base directory is "mod-dir/sound/"
@@ -361,7 +376,7 @@
 *		modspecific:
 *			- every sound below that line must be inside half-life.gcf or <yourmod>.gcf
 *			- if you add other files then said above they may/will crash your server as these sounds are assumed to be existent
-*	
+*
 *	c) speech sounds must be put in quotes (eg: target; "target destroyed")
 *		you may not put different speech types into 1 speech or the speech wont be played
 *		speech without directory is used from "vox/.."
@@ -370,7 +385,7 @@
 *		BUT "hgrunt/yessir no" will work
 *		get all available speech sounds here:
 *			"http://www.adminmod.org/help/online/Admin_Mod_Reference/Half_Life_Sounds.htm"
-*	
+*
 *	d) "@" infront of a
 *		- word means only admin can use this word
 *		- wav/mp3/speech/word means players can use the word but this sound is only played by admins
@@ -392,11 +407,11 @@
 #define	ALLOW_SORT	1
 
 // Array Defines, ATTENTION: ( MAX_RANDOM + 1 ) * TOK_LENGTH must be smaller 2048 !!!
-#define MAX_KEYWORDS	80				// Maximum number of keywords ( ATTENTION: 2 are reserved )
-#define MAX_RANDOM	15				// Maximum number of sounds per keyword
-#define TOK_LENGTH	60				// Maximum length of keyword and sound file strings
-#define MAX_BANS	32				// Maximum number of bans stored
-#define NUM_PER_LINE	6				// Number of words per line from amx_sound_help
+#define MAX_KEYWORDS  80  // Maximum number of keywords ( ATTENTION: 2 are reserved )
+#define MAX_RANDOM    15  // Maximum number of sounds per keyword
+#define TOK_LENGTH    60  // Maximum length of keyword and sound file strings
+#define MAX_BANS      32  // Maximum number of bans stored
+#define NUM_PER_LINE  6   // Number of words per line from amx_sound_help
 #define BUFFER_LEN	TOK_LENGTH * MAX_RANDOM
 
 //#pragma dynamic 16384
@@ -405,30 +420,31 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.6.6d"
+#define PLUGIN_VERSION		"1.7.0"
 
-new Enable_Sound[] =	"misc/woohoo.wav"	// Sound played when Sank Soounds being enabled
-new Disable_Sound[] =	"misc/awwcrap.wav"	// Sound played when Sank Soounds being disabled
+new Enable_Sound[] =  "misc/woohoo.wav"   // Sound played when Sank Soounds being enabled
+new Disable_Sound[] = "misc/awwcrap.wav"  // Sound played when Sank Soounds being disabled
 
 new config_filename[128]
 
-new SndCount[33] = {0, ...}			// Holds the number telling how many sounds a player has played
+new SndCount[33] = {0, ...}               // Holds the number telling how many sounds a player has played
 new Float:SndLenghtCount[33] = {0.0, ...}
 new SndOn[33] = {1, ...}
 
-new SND_WARN = 0				// The number at which a player will get warned for playing too many sounds
-new SND_MAX = 0					// The number at which a player will get kicked for playing too many sounds
+new SND_WARN = 0                          // The number at which a player will get warned for playing too many sounds
+new SND_MAX = 0                           // The number at which a player will get kicked for playing too many sounds
 new Float:SND_MAX_DUR = 0.0
-new Float:SND_DELAY = 0.0			// Minimum delay between sounds
-new SND_MODE = 15				// Determinates who can play and who can hear sounds (dead and alive)
-new EXACT_MATCH = 1				// Determinates if plugin triggers on exact match, or partial speech match
-new ADMINS_ONLY = 0				// Determinates if only admins are allowed to play sounds
-new DISPLAY_KEYWORDS = 1			// Determinates if keywords are shown in chat or not
+new Float:SND_DELAY = 0.0                 // Minimum delay between sounds
+new SND_MODE = 15                         // Determinates who can play and who can hear sounds (dead and alive)
+new SND_IMMUNITY = ACCESS_ADMIN           // Determine the access levels which shall have immunity to warn/kick/ban (default ACCESS_ADMIN for backwards compatability)
+new EXACT_MATCH = 1                       // Determinates if plugin triggers on exact match, or partial speech match
+new ADMINS_ONLY = 0                       // Determinates if only admins are allowed to play sounds
+new DISPLAY_KEYWORDS = 1                  // Determinates if keywords are shown in chat or not
 
-new Float:NextSoundTime		// spam protection
-new Float:Join_exit_SoundTime	// spam protection 2
+new Float:NextSoundTime                   // spam protection
+new Float:Join_exit_SoundTime             // spam protection 2
 new Float:LastSoundTime = 0.0
-new bSoundsEnabled = 1		// amx_sound <on/off> or <1/0>
+new bSoundsEnabled = 1                    // amx_sound <on/off> or <1/0>
 
 new CVAR_freezetime, CVAR_obey_duration
 
@@ -446,6 +462,7 @@ enum
 	PARSE_SND_WARN,
 	PARSE_SND_DELAY,
 	PARSE_SND_MODE,
+	PARSE_SND_IMMUNITY,
 	PARSE_EXACT_MATCH,
 	PARSE_ADMINS_ONLY,
 	PARSE_DISPLAY_KEYWORDS,
@@ -469,7 +486,7 @@ enum
 	SOUND_TYPE_SPEECH,
 	SOUND_TYPE_MP3,
 	SOUND_TYPE_WAV,
-	SOUND_TYPE_WAV_NOSUB
+	SOUND_TYPE_WAV_LOCAL
 }
 
 enum SOUND_DATA_BASE
@@ -479,13 +496,13 @@ enum SOUND_DATA_BASE
 	SOUND_AMOUNT,
 	FLAGS,
 	PLAY_COUNT_KEY,
-	
+
 	KEY_SOUNDS[BUFFER_LEN],
 	Float:DURATION[MAX_RANDOM],
 	ADMIN_LEVEL[MAX_RANDOM],
 	SOUND_TYPE[MAX_RANDOM],
 	PLAY_COUNT[MAX_RANDOM],
-	
+
 	SOUND_DATA_BASE_END
 }
 
@@ -507,6 +524,7 @@ public plugin_init( )
 	register_concmd("amx_sound_debug", "amx_sound_debug", ACCESS_ADMIN, "prints the whole Word/Sound combo list")
 	register_concmd("amx_sound_ban", "amx_sound_ban", ACCESS_ADMIN, " <name or #userid>: Bans player from using sounds for current map")
 	register_concmd("amx_sound_unban", "amx_sound_unban", ACCESS_ADMIN, " <name or #userid>: Unbans player from using sounds for current map")
+	register_concmd("amx_sound_top", "amx_sound_top", ACCESS_ADMIN, " <number> (optional): Shows the top X (default 10) most used keywords during this map")
 	
 	register_clcmd("say", "HandleSay")
 	register_clcmd("say_team", "HandleSay")
@@ -607,7 +625,7 @@ public client_disconnect( id )
 	if ( sound_data[1][ADMIN_LEVEL][rand] != 0
 		&& !(get_user_flags(id) & sound_data[1][ADMIN_LEVEL][rand]) )
 		return
-		
+	
 	playsoundall(playFile, sound_data[1][SOUND_TYPE][rand])
 	
 	Join_exit_SoundTime = gametime + sound_data[1][DURATION][rand]
@@ -672,7 +690,7 @@ public amx_sound_add( id , level , cid )
 		
 		return PLUGIN_HANDLED
 	}
-
+	
 	// First look for special parameters
 	if ( equali(Word, "SND_MAX") )
 	{
@@ -693,6 +711,10 @@ public amx_sound_add( id , level , cid )
 	}else if ( equali(Word, "SND_MODE") )
 	{
 		SND_MODE = str_to_num(Sound)
+		configOption = 1
+	}else if ( equali(Word, "SND_IMMUNITY") )
+	{
+		SND_IMMUNITY = str_to_num(Sound)
 		configOption = 1
 	}else if ( equali(Word, "EXACT_MATCH") )
 	{
@@ -734,7 +756,7 @@ public amx_sound_add( id , level , cid )
 			// If an empty string, then break this loop
 			if ( strlen(sound_data[i][KEY_SOUNDS][TOK_LENGTH * j]) == 0 )
 				break
-
+			
 			// See if this is the same as the new Sound
 			if ( equali(Sound, sound_data[i][KEY_SOUNDS][TOK_LENGTH * j], TOK_LENGTH) )
 			{
@@ -807,7 +829,7 @@ public amx_sound( id , level , cid )
 			client_print(0, print_chat, "Sank Sounds >> Plugin has been enabled")
 			if ( Enable_Sound[0] )
 			{
-				new type = Enable_Sound[0] == '^"' ? SOUND_TYPE_SPEECH : ( Enable_Sound[strlen(Enable_Sound) - 1] == '3' ? SOUND_TYPE_MP3 : ( contain(Enable_Sound, "/") != -1 ? SOUND_TYPE_WAV : SOUND_TYPE_WAV_NOSUB) )
+				new type = Enable_Sound[0] == '^"' ? SOUND_TYPE_SPEECH : ( Enable_Sound[strlen(Enable_Sound) - 1] == '3' ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
 				playsoundall(Enable_Sound, type)
 			}
 		}
@@ -825,7 +847,7 @@ public amx_sound( id , level , cid )
 			client_print(0, print_chat, "Sank Sounds >> Plugin has been disabled")
 			if ( Disable_Sound[0] )
 			{
-				new type = Disable_Sound[0] == '^"' ? SOUND_TYPE_SPEECH : ( Disable_Sound[strlen(Disable_Sound) - 1] == '3' ? SOUND_TYPE_MP3 : ( contain(Disable_Sound, "/") != -1 ? SOUND_TYPE_WAV : SOUND_TYPE_WAV_NOSUB) )
+				new type = Disable_Sound[0] == '^"' ? SOUND_TYPE_SPEECH : ( Disable_Sound[strlen(Disable_Sound) - 1] == '3' ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
 				playsoundall(Disable_Sound, type)
 			}
 		}
@@ -854,7 +876,7 @@ public amx_sound_play( id , level , cid )
 		return PLUGIN_HANDLED
 	}
 	
-	new type = arg[0] == '^"' ? SOUND_TYPE_SPEECH : ( arg[strlen(arg) - 1] == '3' ? SOUND_TYPE_MP3 : ( contain(arg, "/") != -1 ? SOUND_TYPE_WAV : SOUND_TYPE_WAV_NOSUB) )
+	new type = arg[0] == '^"' ? SOUND_TYPE_SPEECH : ( arg[strlen(arg) - 1] == '3' ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
 	playsoundall(arg, type)
 	
 	return PLUGIN_HANDLED
@@ -952,7 +974,7 @@ public amx_sound_remove( id , level , cid )
 			
 			return PLUGIN_HANDLED
 		}
-			
+		
 		// Just remove the one Sound, if it exists
 		for( jCurSound = 0; jCurSound < MAX_RANDOM; ++jCurSound )
 		{
@@ -1019,30 +1041,6 @@ public amx_sound_write( id , level , cid )
 		return PLUGIN_HANDLED
 	}
 	
-	/************ File should have the following format: **************
-	# TimeStamp:		07:15:00 Monday January 15, 2001
-	# File created by:	[SPU]Crazy_Chevy
-
-	# Important parameters:
-	SND_MAX;		20
-	SND_MAX_DUR;		180.0
-	SND_WARN;		17
-	SND_JOIN;		misc/hi.wav
-	SND_EXIT;		misc/comeagain.wav
-	SND_DELAY;		0.0
-	SND_MODE;		15
-	EXACT_MATCH;		1
-	ADMINS_ONLY;		0
-	DISPLAY_KEYWORDS;	1
-
-	# Word/Sound combinations:
-	crap;			misc/awwcrap.Wav;misc/awwcrap2.wav
-	woohoo;			misc/woohoo.wav
-	@ha ha;			misc/haha.wav
-	doh;			misc/doh.wav;misc/doh2.wav;@misc/doh3.wav
-
-	******************************************************************/
-	
 	new TimeStamp[128], name[33], Text[BUFFER_LEN + TOK_LENGTH]
 	new Textlen = BUFFER_LEN + TOK_LENGTH - 1
 	get_user_name(id, name, 32)
@@ -1080,6 +1078,10 @@ public amx_sound_write( id , level , cid )
 	formatex(Text, Textlen, "SND_DELAY;^t^t%f^n", SND_DELAY)
 	fputs(file, Text)
 	formatex(Text, Textlen, "SND_MODE;^t^t%d^n", SND_MODE)
+	fputs(file, Text)
+	new snd_imm_str[32]
+	get_flags(SND_IMMUNITY, snd_imm_str, 26)
+	formatex(Text, Textlen, "SND_IMMUNITY;^t^t^"%s^"^n", snd_imm_str)
 	fputs(file, Text)
 	formatex(Text, Textlen, "EXACT_MATCH;^t^t%d^n", EXACT_MATCH)
 	fputs(file, Text)
@@ -1157,26 +1159,29 @@ public amx_sound_debug( id , level , cid )
 			add(exit_snd_buff, BUFFER_LEN, tempstr)
 		}
 	}
+	
+	new snd_imm_str[32]
+	get_flags(SND_IMMUNITY, snd_imm_str, 26)
 	if ( id )
 	{
 		client_print(id, print_console, "SND_JOIN: %s", join_snd_buff)
 		client_print(id, print_console, "SND_EXIT: %s", exit_snd_buff)
-		client_print(id, print_console, "SND_DELAY: %f^nSND_MODE: %d^nEXACT_MATCH: %d", SND_DELAY, SND_MODE, EXACT_MATCH)
+		client_print(id, print_console, "SND_DELAY: %f^nSND_MODE: %d^nSND_IMMUNITY: %s^nEXACT_MATCH: %d", SND_DELAY, SND_MODE, snd_imm_str, EXACT_MATCH)
 		client_print(id, print_console, "ADMINS_ONLY: %d^nDISPLAY_KEYWORDS: %d", ADMINS_ONLY, DISPLAY_KEYWORDS)
 	}else
 	{
 		server_print("SND_JOIN: %s^n", join_snd_buff)
 		server_print("SND_EXIT: %s^n", exit_snd_buff)
-		server_print("SND_DELAY: %f^nSND_MODE: %d^nEXACT_MATCH: %d^n", SND_DELAY, SND_MODE, EXACT_MATCH)
+		server_print("SND_DELAY: %f^nSND_MODE: %d^nSND_IMMUNITY: %s^nEXACT_MATCH: %d^n", SND_DELAY, SND_MODE, snd_imm_str, EXACT_MATCH)
 		server_print("ADMINS_ONLY: %d^nDISPLAY_KEYWORDS: %d^n", ADMINS_ONLY, DISPLAY_KEYWORDS)
 	}
-
+	
 	// Print out the matrix of sound data, so we got what we think we did
 	for( i = 2; i < MAX_KEYWORDS; ++i )	// first 2 elements are reserved for Join / Exit sounds
 	{
 		if ( strlen(sound_data[i][KEYWORD]) == 0 )
 			break
-		
+
 		new access_level[32]
 		get_flags(sound_data[i][ADMIN_LEVEL_BASE], access_level, 31)
 		if ( id )
@@ -1187,7 +1192,7 @@ public amx_sound_debug( id , level , cid )
 		{
 			if ( strlen(sound_data[i][KEY_SOUNDS][j * TOK_LENGTH]) == 0 )
 				continue
-			
+
 			get_flags(sound_data[i][ADMIN_LEVEL][j], access_level, 31)
 			if ( id )
 				client_print(id, print_console, " ^"%s^" - time: %5.2f - admin level ^"%s^" (played: %d)", sound_data[i][KEY_SOUNDS][j * TOK_LENGTH], sound_data[i][DURATION][j], access_level, sound_data[i][PLAY_COUNT][j])
@@ -1215,7 +1220,7 @@ public amx_sound_ban( id , level , cid )
 	if ( !player )
 		return PLUGIN_HANDLED
 	
-	if ( get_user_flags(player) & ACCESS_ADMIN )
+	if ( get_user_flags(player) & SND_IMMUNITY )
 		return PLUGIN_HANDLED
 	
 	if ( restrict_playing_sounds[player] == -1 )
@@ -1297,6 +1302,70 @@ public amx_sound_unban( id , level , cid )
 	return PLUGIN_HANDLED
 }
 
+public amx_sound_top( id , level , cid )
+{
+	if ( !cmd_access(id, level, cid, 1) )
+		return PLUGIN_HANDLED
+	
+	new arg[33]
+	read_argv(1, arg, 32)
+	new topX = 10
+	if ( strlen(arg) > 0 )
+		topX = str_to_num(arg)
+	
+	if ( topX < 1
+		|| topX > 50 )
+	{
+		client_print(id, print_console, "Sank Sounds >> Set a value from 1 to 50 or leave it blank")
+		return PLUGIN_HANDLED
+	}
+	
+	new topIDs[50] = {-1, ...}
+	new topCount[50] = {0, ...}
+	for ( new keyIndex = 0; keyIndex < MAX_KEYWORDS; ++keyIndex )
+	{
+		// end of list reached
+		if ( sound_data[keyIndex][KEYWORD][0] == 0 )
+			break
+		
+		for ( new i = 0; i < topX; ++i )
+		{
+			if ( sound_data[keyIndex][PLAY_COUNT_KEY] <= topCount[i] )
+				continue
+			
+			// copy all other down
+			for ( new j = topX - 1; j > i; --j )
+			{
+				topIDs[j] = topIDs[j - 1]
+				topCount[j] = topCount[j - 1]
+			}
+			topIDs[i] = keyIndex
+			topCount[i] = sound_data[keyIndex][PLAY_COUNT_KEY]
+			break
+		}
+	}
+	new text[512]
+	new counter = 0
+	client_print(id, print_console, "Sank Sounds >> Top %d:", topX)
+	while ( counter < topX )
+	{
+		if ( topIDs[counter] != -1 )
+			format(text, 511, "%s(%d) %s^n", text, topCount[counter], sound_data[topIDs[counter]][KEYWORD])
+		else
+			counter = topX - 1
+		if ( (counter % 10 == 0
+				&& counter != 0 )
+			|| counter == topX - 1 )
+		{
+			client_print(id, print_console, text)
+			text[0] = 0
+		}
+		++counter
+	}
+	
+	return PLUGIN_HANDLED
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // Everything a person says goes through here, and we determine if we want to
 // play a sound or not.
@@ -1318,7 +1387,8 @@ public HandleSay( id )
 	remove_quotes(Speech)
 	
 	// credit to SR71Goku for fixing this oversight:
-	if ( !strlen(Speech) )
+	new speachLen = strlen(Speech)
+	if ( !speachLen )
 		return PLUGIN_CONTINUE
 	
 	if ( equal(Speech, "/sound", 6) )
@@ -1358,14 +1428,19 @@ public HandleSay( id )
 	}
 	
 	new ListIndex = -1
+	new pinToLocation = (Speech[speachLen - 1] == '!')
 	// Check to see if what the player said is a trigger for a sound
 	for ( new i = 2; i < MAX_KEYWORDS; ++i )	// first 2 elements are reserved for Join / Exit sounds
 	{
 		// end of list reached
 		if ( sound_data[i][KEYWORD][0] == 0 )
-			break;
+			break
 		
 		if ( equali(Speech, sound_data[i][KEYWORD])
+			|| (EXACT_MATCH == 1
+				&& pinToLocation == 1
+				&& speachLen == strlen(sound_data[i][KEYWORD]) + 1
+				&& equali(Speech, sound_data[i][KEYWORD], speachLen - 1) )
 			|| ( EXACT_MATCH == 0
 				&& containi(Speech, sound_data[i][KEYWORD]) != -1 ) )
 		{
@@ -1388,7 +1463,7 @@ public HandleSay( id )
 	if ( gametime > NextSoundTime + SND_DELAY			// 1.  check for sound overlapping + delay time
 		|| ( admin_flags & ADMIN_RCON				// 2.  check if super admin
 			&& !(obey_duration_mode & 4) )			// 2b. check if super admin have to obey duration
-		|| ( admin_flags & ACCESS_ADMIN				// 3.  check if admin
+		|| ( admin_flags & SND_IMMUNITY				// 3.  check if admin
 			&& !(obey_duration_mode & 2) )			// 3b. check if admin have to obey duration
 		|| ( !(obey_duration_mode & 1)				// 4.  check if overlapping is allowed
 			&& gametime > LastSoundTime + SND_DELAY ) )	// 4b. or for delay time
@@ -1401,7 +1476,7 @@ public HandleSay( id )
 			new rand = random(sound_data[ListIndex][SOUND_AMOUNT])
 			new timeout
 			new playFile[TOK_LENGTH]
-
+			
 			// This for loop runs around until it finds a real file to play
 			// Defaults to the first Sound file, if no file is found at random.
 			for( timeout = MAX_RANDOM;			// Initial condition
@@ -1432,7 +1507,11 @@ public HandleSay( id )
 				++sound_data[ListIndex][PLAY_COUNT_KEY]
 				++sound_data[ListIndex][PLAY_COUNT][rand]
 				
-				playsoundall(playFile, sound_data[ListIndex][SOUND_TYPE][rand], SND_MODE & 16, alive)
+				new type = sound_data[ListIndex][SOUND_TYPE][rand]
+				if ( pinToLocation == 1
+					&& type == SOUND_TYPE_WAV )
+					type = SOUND_TYPE_WAV_LOCAL
+				playsoundall(playFile, type, SND_MODE & 16, alive)
 				
 				LastSoundTime = gametime
 			}
@@ -1484,7 +1563,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 	new tmpIndex = -1
 	new maxLineBuf_len = ( BUFFER_LEN + TOK_LENGTH ) - 1
 	new strLineBuf[BUFFER_LEN + TOK_LENGTH]
-		
+	
 	new error_code = ERROR_NONE
 	new parse_option = PARSE_KEYWORD
 	new temp_str[128]
@@ -1495,7 +1574,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 	if ( !file )
 	{
 		log_amx("Sank Sounds >> Unable to read from ^"%s^" file", loadfile)
-		
+
 		return
 	}
 	
@@ -1618,6 +1697,8 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 					parse_option = PARSE_SND_DELAY
 				else if ( equali(temp_str, "SND_MODE") )
 					parse_option = PARSE_SND_MODE
+				else if ( equali(temp_str, "SND_IMMUNITY") )
+					parse_option = PARSE_SND_IMMUNITY
 				else if ( equali(temp_str, "EXACT_MATCH") )
 					parse_option = PARSE_EXACT_MATCH
 				else if ( equali(temp_str, "ADMINS_ONLY") )
@@ -1676,6 +1757,19 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 					case PARSE_SND_MODE:
 					{
 						SND_MODE = str_to_num(temp_str)
+					}
+					case PARSE_SND_IMMUNITY:
+					{
+						if ( temp_str[0] == '^"' )
+						{
+							new temp_str2[32]
+							copyc(temp_str2, 31, temp_str[1], '^"')
+							if ( strlen(temp_str2) == 0 )
+								SND_IMMUNITY = (1<<30)
+							else
+								SND_IMMUNITY = read_flags(temp_str2)
+						}else
+							SND_IMMUNITY = read_flags(temp_str)
 					}
 					case PARSE_EXACT_MATCH:
 					{
@@ -1778,8 +1872,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 QuotaExceeded( id )
 {
 	// check if is admin
-	new admin_check = ( get_user_flags(id) & ACCESS_ADMIN )
-	
+	new admin_check = ( get_user_flags(id) & SND_IMMUNITY )
 	if ( ADMINS_ONLY && !admin_check )
 		return 1
 	
@@ -1794,14 +1887,19 @@ QuotaExceeded( id )
 			if ( SndCount[id] - 3 < SND_MAX )
 			{
 				client_print(id, print_chat, "Sank Sounds >> You were warned, you are muted")
-				
+
 				// player is already muted, we increament here to save a variable to protect player from "you are muted" spam ( only 3 warnings )
 				++SndCount[id]
 			}
 			
 			return 1
 		}else if ( SndCount[id] >= SND_WARN )
-			client_print(id, print_chat, "Sank Sounds >> You have %d left before you get muted", SND_MAX - SndCount[id])
+		{
+			if ( SndCount[id] + 1 == SND_MAX )
+				client_print(id, print_chat, "Sank Sounds >> This was your last sound")
+			else
+				client_print(id, print_chat, "Sank Sounds >> You have %d left before you get muted", SND_MAX - SndCount[id] - 1)
+		}
 	}
 	
 	if ( SND_MAX_DUR != 0.0
@@ -1883,7 +1981,7 @@ playsoundall( sound[] , type , split_dead_alive = 0 , sender_alive_status = 0 )
 		
 		if ( type == SOUND_TYPE_MP3 )
 			client_cmd(i, "mp3 play ^"%s^"", sound)
-		else if ( type == SOUND_TYPE_WAV_NOSUB )
+		else if ( type == SOUND_TYPE_WAV_LOCAL )
 			client_cmd(i, "play ^"%s^"", sound)
 		else if ( type == SOUND_TYPE_SPEECH )
 			client_cmd(i, "spk %s", sound)
@@ -2058,15 +2156,15 @@ array_switch_elements( element_one , element_two )
 		temp_float = sound_data[element_one][DURATION][i]
 		sound_data[element_one][DURATION][i] = _:sound_data[element_two][DURATION][i]
 		sound_data[element_two][DURATION][i] = _:temp_float
-		
+
 		temp_access = sound_data[element_one][ADMIN_LEVEL][i]
 		sound_data[element_one][ADMIN_LEVEL][i] = sound_data[element_two][ADMIN_LEVEL][i]
 		sound_data[element_two][ADMIN_LEVEL][i] = temp_access
-		
+
 		temp_type = sound_data[element_one][SOUND_TYPE][i]
 		sound_data[element_one][SOUND_TYPE][i] = sound_data[element_two][SOUND_TYPE][i]
 		sound_data[element_two][SOUND_TYPE][i] = temp_type
-		
+
 		temp_play_count = sound_data[element_one][PLAY_COUNT][i]
 		sound_data[element_one][PLAY_COUNT][i] = sound_data[element_two][PLAY_COUNT][i]
 		sound_data[element_two][PLAY_COUNT][i] = temp_play_count
@@ -2121,26 +2219,39 @@ array_add_element( num , keyword[] )
 array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , allow_global_precache = 0 , precache_sounds = 0 , allowed_to_precache = 0 )
 {
 	sound_data[num][ADMIN_LEVEL][elem] = cfg_parse_access(soundfile)
-	sound_data[num][SOUND_TYPE][elem] = soundfile[0] == '^"' ? SOUND_TYPE_SPEECH : ( soundfile[strlen(soundfile) - 1] == '3' ? SOUND_TYPE_MP3 : ( contain(soundfile, "/") != -1 ? SOUND_TYPE_WAV : SOUND_TYPE_WAV_NOSUB ) )
+	sound_data[num][SOUND_TYPE][elem] = soundfile[0] == '^"' ? SOUND_TYPE_SPEECH : ( soundfile[strlen(soundfile) - 1] == '3' ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
 	sound_data[num][PLAY_COUNT][elem] = 0
 	
 	// check if not speech sounds
 	if ( soundfile[0] != '^"' )
 	{
 		new sound_file_name[TOK_LENGTH + 1 + 10]
-		new is_mp3 = ( containi(soundfile, ".mp") != -1 )
+		new is_mp3 = ( containi(soundfile, ".mp3") != -1 )
+		/*if ( !is_mp3 )
+		{	// ".mp3" in not in the string^
+			if ( equali(soundfile, "sound/", 6) )
+				formatex(sound_file_name, TOK_LENGTH + 10, "%s", soundfile)
+			else
+				formatex(sound_file_name, TOK_LENGTH + 10, "sound/%s", soundfile)
+		}*/
 		if ( !is_mp3 )
-		{	// ".mp3" in not in the string
-			formatex(sound_file_name, TOK_LENGTH + 10, "sound/%s", soundfile)
-		}else
+		{	// ".mp3" in not in the string^
+			if ( equali(soundfile, "sound/", 6) )
+				formatex(sound_file_name, TOK_LENGTH + 10, "%s", soundfile)
+			else
+				formatex(sound_file_name, TOK_LENGTH + 10, "sound/../%s", soundfile)
+		}
+		else
+		{
 			copy(sound_file_name, TOK_LENGTH + 10, soundfile)
+		}
 		
 		if ( allow_check_existence )
 		{
 			if ( !file_exists(sound_file_name) )
 			{
 				log_amx("Sank Sounds >> Trying to load a file that dont exist. Skipping this file: ^"%s^"", sound_file_name)
-				
+
 				return -1
 			}
 			
@@ -2275,7 +2386,6 @@ cfg_write_keyword( index , Text[] , Textlen )
 		formatex(Text, Textlen, "@%s@%s;^t^t", access_str, sound_data[index][KEYWORD])
 	}else
 		formatex(Text, Textlen, "%s;^t^t", sound_data[index][KEYWORD])
-	
 }
 
 cfg_write_keysound( index , Text[] , Textlen )
@@ -2307,7 +2417,7 @@ cfg_parse_access( str[] )
 			copy(str, 127, str[second_at + 1 + 1])
 		}else
 		{
-			access_level = ACCESS_ADMIN
+			access_level = SND_IMMUNITY
 			copy(str, 127, str[1])
 		}
 	}
@@ -2319,7 +2429,7 @@ Float:cfg_get_duration( sound_file[] , type )
 {
 	switch ( type )
 	{
-		case SOUND_TYPE_WAV, SOUND_TYPE_WAV_NOSUB:
+		case SOUND_TYPE_WAV:
 		{
 			return cfg_get_wav_duration(sound_file)
 		}
@@ -2471,32 +2581,12 @@ Float:cfg_get_mp3_duration( mp3_file[] )
 			continue
 		}else
 			break
-		
-		/*++file_pos
-		if ( ( byte / 16 ) < 14
-			|| byte == 255 )
-			continue
-		
-		//if ( fgetc(file) > 80 )
-		//if ( fgetc(file) > 0 )
-		//if ( fgetc(file) > 40 )
-		if ( fgetc(file) > 16 )
-		{
-			// header starts with hex: FF YY XX
-			// YY must be YY modulo 16 = 15, but NOT equal 255 (mostly it is FB or F3)
-			fseek(file, file_pos, SEEK_SET)
-			found_header = 1
-		}else
-			++file_pos*/
 	}while ( !found_header && byte != -1 )
 	
 	fclose(file)
 	
 	if ( byte == -1 )
 		return 0.0
-	
-	//if ( mp3_bitrate == 2 )
-	//	log_amx("Sank Sounds >> ^"%s^" has a samplerate of %iHz. This is not supported by Half Life 1 Engine", mp3_file, samplingrate_table[mpeg_version * 4 + mp3_samplerate])
 	
 	new mpeg_version_for_bitrate = 0
 	if ( mpeg_version == 3 )
@@ -2544,7 +2634,6 @@ verify_header( header , header2 , &mpeg_version , &layer , &mp3_bitrate , &mp3_s
 	
 	if ( layer != 3 )
 		return -1
-	
 	
 	mp3_bitrate = ( header2 & MP3_BITRATE_BIT1 ) / MP3_BITRATE_BIT1
 		+ ( header2 & MP3_BITRATE_BIT2 ) / MP3_BITRATE_BIT1
