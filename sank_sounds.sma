@@ -335,6 +335,10 @@
 *	- fixed:
 *		- exit sounds could be replaced by keyword sounds
 *
+* v1.8.3: (21.10.2013)
+*	- fixed:
+*		- ADMINS_ONLY setting was ignored
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -447,7 +451,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.8.2"
+#define PLUGIN_VERSION		"1.8.3"
 
 new Enable_Sound[] =  "misc/woohoo.wav"   // Sound played when Sank Soounds being enabled
 new Disable_Sound[] = "misc/awwcrap.wav"  // Sound played when Sank Soounds being disabled
@@ -1894,7 +1898,7 @@ isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 	
 	// check if only admins can play sounds
 	if ( ADMINS_ONLY
-		&& !admin_flags )
+		&& !(admin_flags & ACCESS_ADMIN) )
 		return RESULT_ADMINS_ONLY
 	
 	// check if super admin
@@ -1907,7 +1911,7 @@ isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 	}
 	
 	// check if admin
-	if ( admin_flags & SND_IMMUNITY )
+	if ( admin_flags & ACCESS_ADMIN )
 	{
 		// check if admin has to obey duration
 		if ( !(obey_duration_mode & 2) )
