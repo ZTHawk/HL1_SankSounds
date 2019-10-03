@@ -139,6 +139,18 @@
 *		- possible errors fixed
 *		- error with MOTD display fixed
 *
+* v1.4.5:
+*	- fixed:
+*		- ADMINS_ONLY was not working always
+*		- players could ony play on sound less than specified in SND_MAX
+*		- runtime error with amx_sound_reload
+*	- added:
+*		- sounds can now also be used in team chat
+*		- amx_sound_unban to unban players
+*	- changed:
+*		- keyword check tweaked
+*		- amx_sound_ban now do not expect additional parameter "on / off" or "1 / 0"
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -246,7 +258,7 @@ new Disable_Sound[] =	"misc/awwcrap.wav"		// Sound played when Sank Soounds disa
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 new plugin_author[] = "White Panther, Luke Sankey, HunteR"
-new plugin_version[] = "1.4.3"
+new plugin_version[] = "1.4.5"
 
 new FILENAME[128]
 
@@ -286,8 +298,10 @@ public plugin_init( )
 	register_concmd("amx_sound_remove", "amx_sound_remove", ACCESS_ADMIN, " <keyword> <dir/wav> : Removes a Word/Wav combo from the sound list. Must use quotes")
 	register_concmd("amx_sound_write", "amx_sound_write", ACCESS_ADMIN, " :  Writes current sound configuration to file")
 	register_concmd("amx_sound_debug", "amx_sound_print_matrix", ACCESS_ADMIN, "prints the whole Word/Wav combo list")
-	register_concmd("amx_sound_ban", "amx_sound_ban", ACCESS_ADMIN, " <user> <1/0 or on/off>: Bans player from using sounds for current map")
+	register_concmd("amx_sound_ban", "amx_sound_ban", ACCESS_ADMIN, " <name or #userid>: Bans player from using sounds for current map")
+	register_concmd("amx_sound_unban", "amx_sound_unban", ACCESS_ADMIN, " <name or #userid>: Unbans player from using sounds for current map")
 	register_clcmd("say", "HandleSay")
+	register_clcmd("say_team", "HandleSay")
 	
 	register_cvar("mp_sank_sounds_download", "1")
 	register_cvar("mp_sank_sounds_freezetime", "0")
@@ -315,17 +329,16 @@ public client_putinserver( id )
 {
 	restrict_playing_sounds[id] = 0
 	
-	new steamid[60]
+	new steamid[60], i
 	get_user_authid(id, steamid, 59)
-	for ( new i = 1; i <= g_max_players; i++ )
+	for ( i = 1; i <= g_max_players; i++ )
 	{
-		if ( equal(steamid, banned_player_steamid[id]) )
+		if ( equal(steamid, banned_player_steamid[i]) )
 			restrict_playing_sounds[id] = 1
 	}
 	if ( !restrict_playing_sounds[id] )
 	{
-		restrict_playing_sounds[id] = 0
-		for ( new i = 0; i < 60; i++ )
+		for ( i = 0; i < 60; i++ )
 			banned_player_steamid[id][i] = 0
 	}
 }
@@ -646,7 +659,7 @@ public amx_sound_reload( id , level , cid )
 		Join_wavs[0] = 0
 		Exit_wavs[0] = 0
 		
-		parse_sound_file(parsefile)
+		parse_sound_file(parsefile, 0)
 	}
 	return PLUGIN_HANDLED
 }
@@ -1014,7 +1027,7 @@ public amx_sound_print_matrix( id , level , cid )
 //////////////////////////////////////////////////////////////////////////////
 // Bans players from using sounds for current map
 //
-// Usage: amx_sound_ban <player> <1/0 OR on/off>
+// Usage: amx_sound_ban <player>
 //////////////////////////////////////////////////////////////////////////////
 public amx_sound_ban( id , level , cid )
 {
@@ -1022,25 +1035,37 @@ public amx_sound_ban( id , level , cid )
 	{
 		new arg[33]
 		read_argv(1, arg, 32)
-		new player = cmd_target(id, arg, 4)
+		new player = cmd_target(id, arg, 1)
 		if ( !player )
 			return PLUGIN_HANDLED
 		
 		if ( get_user_flags(player)& ACCESS_ADMIN )
 			return PLUGIN_HANDLED
 		
-		new onoff[5]
-		read_argv(2, onoff, 4)
-		if ( equal(onoff, "on") || equal(onoff, "1") )
-		{
-			restrict_playing_sounds[player] = 1
-			get_user_authid(id, banned_player_steamid[player], 59)
-		}else if ( equal(onoff, "off") || equal(onoff, "0") )
-		{
-			restrict_playing_sounds[player] = 0
-			for ( new i = 0; i < 60; i++ )
-				banned_player_steamid[player][i] = 0
-		}
+		restrict_playing_sounds[player] = 1
+		get_user_authid(id, banned_player_steamid[player], 59)
+	}
+	return PLUGIN_HANDLED
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Unbans players from using sounds for current map
+//
+// Usage: amx_sound_unban <player>
+//////////////////////////////////////////////////////////////////////////////
+public amx_sound_unban( id , level , cid )
+{
+	if ( cmd_access(id, level, cid, 2) )
+	{
+		new arg[33]
+		read_argv(1, arg, 32)
+		new player = cmd_target(id, arg)
+		if ( !player )
+			return PLUGIN_HANDLED
+		
+		restrict_playing_sounds[player] = 0
+		for ( new i = 0; i < 60; i++ )
+			banned_player_steamid[player][i] = 0
 	}
 	return PLUGIN_HANDLED
 }
@@ -1063,14 +1088,14 @@ public HandleSay( id )
 		return PLUGIN_CONTINUE
 	
 	new Speech[128]
-	read_args(Speech,127)
+	read_args(Speech, 127)
 	remove_quotes(Speech)
 	
 	// credit to SR71Goku for fixing this oversight:
 	if( !strlen(Speech) )
 		return PLUGIN_CONTINUE
 	
-	if ( equal(Speech,"/sounds",7) )
+	if ( equal(Speech, "/sounds", 7) )
 	{
 		if ( Speech[7] == 'o' && Speech[8] == 'n' && Speech[9] == 0 )
 			SndOn[id] = 1
@@ -1086,21 +1111,23 @@ public HandleSay( id )
 		client_print(id, print_chat, "Sank Sounds Plugin >> Minimum sound delay time (%3.1f second(s)) not reached yet", SND_DELAY)
 	else
 	{
-		// Remove @ from user's speech, incase non-admin is trying to impersonate real admin
-		replace(Speech, 127, "@", "")
-		
 		// Check to see if what the player said is a trigger for a sound
-		new i, Text[TOK_LENGTH+1]
+		new i, Text[TOK_LENGTH+1], block_admin_sound
 		for ( i = 0; i < MAX_KEYWORDS; i++ )
 		{
 			copy(Text, TOK_LENGTH, WordWavCombo[i])
 			
 			// Remove the possible @ sign from beginning (for admins only)
-			if ( get_user_flags(id) & ACCESS_ADMIN )
+			if ( Text[0] == '@' )
+			{
+				if ( !( get_user_flags(id) & ACCESS_ADMIN ) )
+					block_admin_sound = 1
 				replace(Text, TOK_LENGTH, "@", "")
+			}
 			if ( equali(Speech, Text) || ( EXACT_MATCH == 0 && containi(Speech, Text) != -1 ) )
 			{
-				ListIndex = i
+				if ( !block_admin_sound )
+					ListIndex = i
 				break
 			}
 		}
@@ -1166,7 +1193,7 @@ public HandleSay( id )
 //
 // Usage: admin_sound_reload <filename>
 //////////////////////////////////////////////////////////////////////////////
-parse_sound_file( loadfile[] )
+parse_sound_file( loadfile[] , precache_sounds = 1 )
 {
 	new GotLine
 	new iLineNum = 0, ListIndex = 0
@@ -1196,6 +1223,7 @@ parse_sound_file( loadfile[] )
 	
 	if ( !strlen(loadfile) )
 		copy(loadfile, 127, FILENAME)
+	
 	if ( file_exists(loadfile) )
 	{
 		new i, temp = 0
@@ -1330,7 +1358,7 @@ parse_sound_file( loadfile[] )
 								continue
 							}
 							
-							if ( allow_global_precache )
+							if ( allow_global_precache && precache_sounds == 1 )
 							{
 								if ( allowed_to_precache )
 								{
@@ -1414,7 +1442,7 @@ parse_sound_file( loadfile[] )
 						
 						ListIndex++
 					}else
-						log_amx("Sank Sounds Plugin >> Found keyword without any valid sounds. Skipping this keyword: ^"%s^"", WadOstrings)
+						log_amx("Sank Sounds Plugin >> Found keyword without any valid sound. Skipping this keyword: ^"%s^"", WadOstrings)
 				}
 			}
 			// Initialize variables for next time by clearing all the
@@ -1461,35 +1489,27 @@ parse_sound_file( loadfile[] )
 //////////////////////////////////////////////////////////////////////////////
 QuotaExceeded( id )
 {
-	// If the sound limitation is disabled, then return happily.
-	if ( SND_MAX == 0 )
-		return 0
-
-	// If the user is not really a user, then maybe a bot, maybe a bug...?
-	if ( !is_user_connected(id) )
-		return 0
-	
 	// check if is admin
 	new admin_check = ( get_user_flags(id) & ACCESS_ADMIN )
 	
 	if ( ADMINS_ONLY && !admin_check )
 		return 1
 	
-	if ( !admin_check )
+	// If the sound limitation is disabled, then return happily.
+	if ( !admin_check && SND_MAX != 0 )
 	{
-		new HowManyLeft = SND_MAX - SndCount[id]
-		if ( SndCount[id] >= SND_MAX )
+		// Increment their playsound count
+		++SndCount[id]
+		
+		if ( SndCount[id] > SND_MAX )
 		{
 			client_print(id, print_chat, "Sank Sounds Plugin >> You were warned, you are muted")
 			return 1
 		}else if ( SndCount[id] >= SND_WARN )
 		{
-			client_print(id, print_chat, "Sank Sounds Plugin >> You have almost used up your sound quota. Stop")
+			new HowManyLeft = SND_MAX - SndCount[id]
 			client_print(id, print_chat, "Sank Sounds Plugin >> You have %d left before you get muted", HowManyLeft)
 		}
-
-		// Increment their playsound count
-		SndCount[id] = SndCount[id] + 1
 	}
 	return 0
 }
@@ -1608,7 +1628,7 @@ trim_spaces( str_to_trim[] )
 print_sound_list( id , motd_msg = 0 )
 {
 	new text[256], motd_buffer[2048], ilen
-	new info_text[64] = "say < keyword >: Plays a sound. Keywords are listed below:"
+	new info_text[64] = "say < keyword >: plays A sound. keYwords are listed Below:"
 	if ( motd_msg )
 		ilen = format(motd_buffer, 2047, "<body bgcolor=#000000><font color=#FFB000><pre>%s^n", info_text)
 	else
