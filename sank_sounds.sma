@@ -170,7 +170,7 @@
 *
 * v1.5.0: ( AmxModX 1.71 or better ONLY )
 *	- fixed:
-*		- sounds beiing not in a subfolder ( eg: sound/mysound.wav ) will now be played
+*		- sounds being not in a subfolder ( eg: sound/mysound.wav ) will now be played
 *		- reconnecting to reset quota will not work anymore
 *		- no more overlapping sounds ( Join and Exit sounds will still overlap other but others cannot overlap them )
 *		- amx_sound_reset now accepts IDs too
@@ -218,14 +218,21 @@
 *	- added:
 *		- minor detection for damaged/invalid files
 *	- changed:
-*		- both "SND_LIST.CFG" and "snd-list.cfg" will work now ( linux )
+*		- both "SND-LIST.CFG" and "snd-list.cfg" will work now ( linux )
 *		- code improvements
 *		- faster config parsing/writing
+*
 * v1.5.5:
 *	- fixed:
 *		- error in mp3 calculation ( once again :( )
 *	- added:
 *		- additional debug info for mp3's when compiled in DEGUB_MODE 1
+*
+* v1.5.6:
+*	- fixed:
+*		- sounds located in <MODDIR>/sounds/ (no subfolder) not being played if dead and alive not being splitted
+*		- long lines not being parsed correctly
+*		- players could play one more sound than allowed
 *
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
@@ -331,7 +338,7 @@ new Enable_Sound[] =	"misc/woohoo.wav"		// Sound played when Sank Soounds enable
 new Disable_Sound[] =	"misc/awwcrap.wav"		// Sound played when Sank Soounds disabled
 
 new plugin_author[] = "White Panther, Luke Sankey, HunteR"
-new plugin_version[] = "1.5.5"
+new plugin_version[] = "1.5.6"
 
 new config_filename[128]
 
@@ -551,7 +558,7 @@ public amx_sound_add( id , level , cid )
 	
 	read_argv(1, Word, TOK_LENGTH)
 	read_argv(2, Wav, TOK_LENGTH)
-	if( strlen(Word) == 0
+	if ( strlen(Word) == 0
 		|| strlen(Wav) == 0 )
 	{
 		client_print(id, print_console, "Sank Sounds >>Invalid format")
@@ -629,7 +636,7 @@ public amx_sound_add( id , level , cid )
 	for( i = 0; i < MAX_KEYWORDS; ++i )
 	{
 		// If an empty string, then break this loop
-		if( strlen(WordWavCombo[i]) == 0 )
+		if ( strlen(WordWavCombo[i]) == 0 )
 			break
 		
 		// If we find a match, then add on the new Wav data
@@ -647,7 +654,7 @@ public amx_sound_add( id , level , cid )
 				if ( strlen(Join_wavs[TOK_LENGTH * ( j - 1 )]) == 0 )
 					break
 				
-				else if( equali(Wav, Join_wavs[TOK_LENGTH * ( j - 1 )], TOK_LENGTH) )
+				else if ( equali(Wav, Join_wavs[TOK_LENGTH * ( j - 1 )], TOK_LENGTH) )
 				{
 					client_print(id, print_console, "Sank Sounds >> ^"%s^" already exists in SND_JOIN", Wav)
 					
@@ -659,7 +666,7 @@ public amx_sound_add( id , level , cid )
 				if ( strlen(Exit_wavs[TOK_LENGTH * ( j - 1 )]) == 0 )
 					break
 				
-				else if( equali(Wav, Exit_wavs[TOK_LENGTH * ( j - 1 )], TOK_LENGTH) )
+				else if ( equali(Wav, Exit_wavs[TOK_LENGTH * ( j - 1 )], TOK_LENGTH) )
 				{
 					client_print(id, print_console, "Sank Sounds >> ^"%s^" already exists in SND_EXIT", Wav)
 					
@@ -672,7 +679,7 @@ public amx_sound_add( id , level , cid )
 					break
 
 				// See if this is the same as the new Wav
-				if( equali(Wav, WordWavCombo[i][TOK_LENGTH * j], TOK_LENGTH) )
+				if ( equali(Wav, WordWavCombo[i][TOK_LENGTH * j], TOK_LENGTH) )
 				{
 					client_print(id, print_console, "Sank Sounds >> ^"%s; %s^" already exists", Word, Wav)
 					
@@ -682,7 +689,7 @@ public amx_sound_add( id , level , cid )
 		}
 
 		// If we reached the end, then there is no room
-		if( j >= MAX_RANDOM )
+		if ( j >= MAX_RANDOM )
 			client_print(id, print_console, "Sank Sounds >> No room for new Wav. Increase MAX_RANDOM and recompile")
 		else
 		{
@@ -701,7 +708,7 @@ public amx_sound_add( id , level , cid )
 	}
 	
 	// If we reached the end, then there is no room
-	if( i >= MAX_KEYWORDS )
+	if ( i >= MAX_KEYWORDS )
 		client_print(id, print_console, "Sank Sounds >> No room for new Word/Wav combo. Increase MAX_KEYWORDS and recompile")
 	else
 	{
@@ -826,7 +833,7 @@ public amx_sound_remove( id , level , cid )
 	
 	read_argv(1, Word, TOK_LENGTH)
 	read_argv(2, Wav, TOK_LENGTH)
-	if( strlen(Word) == 0 )
+	if ( strlen(Word) == 0 )
 	{
 		client_print(id, print_console, "Sank Sounds >> Invalid format")
 		client_print(id, print_console, "Sank Sounds >> USAGE: admin_sound_remove keyword <dir/wav>")
@@ -839,7 +846,7 @@ public amx_sound_remove( id , level , cid )
 	for( iCurWord = 0; iCurWord < MAX_KEYWORDS + 2; ++iCurWord )
 	{
 		// If an empty string, then break this loop, we're at the end
-		if( strlen(WordWavCombo[iCurWord]) == 0 )
+		if ( strlen(WordWavCombo[iCurWord]) == 0 )
 			break
 		// Look for a Word match
 		new jCurWav
@@ -848,12 +855,12 @@ public amx_sound_remove( id , level , cid )
 			joinex = 1
 		else if ( equali(Word, "SND_EXIT", TOK_LENGTH) )
 			joinex = 2
-		if( !equali(Word, WordWavCombo[iCurWord], TOK_LENGTH)
+		if ( !equali(Word, WordWavCombo[iCurWord], TOK_LENGTH)
 			&& !joinex )
 			continue
 		
 		// If no Wav was specified, then remove the whole Word's entry
-		if( strlen(Wav) != 0 )
+		if ( strlen(Wav) != 0 )
 		{
 			// Just remove the one Wav, if it exists
 			for( jCurWav = 1; jCurWav <= MAX_RANDOM; ++jCurWav )
@@ -871,13 +878,15 @@ public amx_sound_remove( id , level , cid )
 					break
 				
 				// speech must have extra ""
-				if ( containi(Wav, ".wav") == -1 && containi(Wav, ".mp") == -1 )
+				if ( containi(Wav, ".wav") == -1
+					&& containi(Wav, ".mp") == -1 )
 					format(Wav, TOK_LENGTH, "^"%s^"", Wav)
 				
 				// Look for a Wav match
 				if ( !equali(Wav, WordWavCombo[iCurWord][TOK_LENGTH * jCurWav], TOK_LENGTH)
-					&& ( !joinex || ( !equali(Wav, Join_wavs[TOK_LENGTH * ( jCurWav - 1 )], TOK_LENGTH)
-						&& !equali(Wav, Exit_wavs[TOK_LENGTH * ( jCurWav - 1 )], TOK_LENGTH) ) ) )
+					&& ( !joinex
+						|| ( !equali(Wav, Join_wavs[TOK_LENGTH * ( jCurWav - 1 )], TOK_LENGTH)
+							&& !equali(Wav, Exit_wavs[TOK_LENGTH * ( jCurWav - 1 )], TOK_LENGTH) ) ) )
 					continue
 				
 				for(; jCurWav <= MAX_RANDOM; ++jCurWav )
@@ -910,7 +919,7 @@ public amx_sound_remove( id , level , cid )
 					
 					// If we're about to copy a string that doesn't exist,
 					// then just erase the last string instead of copying.
-					if( jCurWav >= MAX_RANDOM )
+					if ( jCurWav >= MAX_RANDOM )
 					{
 						// Delete the last Wav string
 						if ( joinex == 1 )
@@ -992,7 +1001,7 @@ public amx_sound_remove( id , level , cid )
 //////////////////////////////////////////////////////////////////////////////
 public amx_sound_write( id , level , cid )
 {
-	if ( !cmd_access(id,level,cid,2) )
+	if ( !cmd_access(id, level, cid, 2) )
 		return PLUGIN_HANDLED
 	
 	new savefile[128]
@@ -1140,12 +1149,14 @@ public amx_sound_write( id , level , cid )
 //////////////////////////////////////////////////////////////////////////////
 public amx_sound_print_matrix( id , level , cid )
 {
-	if ( !cmd_access(id, level, cid, 1) && id > 0 )
+	if ( !cmd_access(id, level, cid, 1)
+		&& id > 0 )
 		return PLUGIN_HANDLED
 	
 	new i, j, join_snd_buff[TOK_LENGTH * MAX_RANDOM], exit_snd_buff[TOK_LENGTH * MAX_RANDOM]
 	
-	if ( !is_dedicated_server() && id == 1 )	// for listenserver and id = 1 we can use server_print
+	if ( !is_dedicated_server()
+		&& id == 1 )	// for listenserver and id = 1 we can use server_print
 		id = 0
 	
 	if ( id )
@@ -1222,7 +1233,7 @@ public amx_sound_ban( id , level , cid )
 	if ( !player )
 		return PLUGIN_HANDLED
 	
-	if ( get_user_flags(player)& ACCESS_ADMIN )
+	if ( get_user_flags(player) & ACCESS_ADMIN )
 		return PLUGIN_HANDLED
 	
 	if ( restrict_playing_sounds[player] == -1 )
@@ -1321,7 +1332,7 @@ public HandleSay( id )
 	remove_quotes(Speech)
 	
 	// credit to SR71Goku for fixing this oversight:
-	if( !strlen(Speech) )
+	if ( !strlen(Speech) )
 		return PLUGIN_CONTINUE
 	
 	if ( equal(Speech, "/sound", 6) )
@@ -1495,6 +1506,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 	
 	new i
 	new ListIndex = 0
+	new maxLineBuf_len = ( ( MAX_RANDOM + 1 ) * TOK_LENGTH ) - 1
 	new strLineBuf[( MAX_RANDOM + 1 ) * TOK_LENGTH]
 	new WadOstrings[( MAX_RANDOM + 1 ) * TOK_LENGTH]	// same as [MAX_RANDOM][TOK_LENGTH]
 	new Float:sound_length[MAX_RANDOM]
@@ -1532,7 +1544,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 		return
 	}
 	
-	while ( fgets(file, strLineBuf, 127) )
+	while ( fgets(file, strLineBuf, maxLineBuf_len) )
 	{
 		if ( (strLineBuf[0] == '^n')						// empty line
 			|| ( strLineBuf[0] == 10 && strLineBuf[1] == '^n' )		// empty line
@@ -1623,7 +1635,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 		position = 0
 		for( i = 0; i < MAX_RANDOM; ++i )
 		{
-			if ( position >= strlen (strLineBuf) )
+			if ( position >= strlen(strLineBuf) )
 			{
 				strLineBuf[0] = 0
 				break
@@ -1669,7 +1681,8 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 				else if ( equali(temp_str, "SND_JOIN")
 					|| equali(temp_str, "SND_EXIT") )
 					is_keyword_sound = 0
-			}else if ( is_wordwav_combo && strlen(temp_str) )
+			}else if ( is_wordwav_combo
+				&& strlen(temp_str) )
 			{
 				// check if not speech sounds
 				if ( ( temp_str[0] != '@' && temp_str[0] != '^"' )
@@ -1684,7 +1697,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 					if ( !is_mp3 )
 					{	// ".mp3" in not in the string
 						copy(sound_file_name_temp, 127, sound_file_name)
-						format(sound_file_name, 127, "sound/%s", sound_file_name)
+						formatex(sound_file_name, 127, "sound/%s", sound_file_name_temp)
 					}
 					
 					if ( allow_check_existence )
@@ -1709,16 +1722,14 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 						}
 					}
 					
-					if ( allow_global_precache && precache_sounds == 1
+					if ( allow_global_precache
+						&& precache_sounds == 1
 						&& allowed_to_precache )
 					{
 						if ( is_mp3 )
-						{
 							precache_generic(sound_file_name)
-						}else
-						{
+						else
 							precache_sound(sound_file_name_temp)
-						}
 					}
 				}
 				if ( is_keyword_sound )
@@ -1731,7 +1742,8 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 		
 		// If we finished MAX_RANDOM times, and strLineBuf[position] still has contents
 		// then we should have a bigger MAX_RANDOM
-		if( position < strlen(strLineBuf) && !fatal_error )
+		if ( position < strlen(strLineBuf)
+			&& !fatal_error )
 		{
 			log_amx("Sank Sounds >> Sound list partially truncated. Increase MAX_RANDOM")
 			log_amx("Sank Sounds >> Continuing to parse file ^"%s^"^n", loadfile)
@@ -1842,37 +1854,29 @@ QuotaExceeded( id )
 		return 1
 	
 	// If the sound limitation is disabled, then return happily.
-	if ( !admin_check )
+	if ( admin_check )
+		return 0
+	
+	if ( SND_MAX != 0 )
 	{
-		new exceeded = 0
-		if ( SND_MAX != 0 )
+		if ( SndCount[id] >= SND_MAX )
 		{
-			if ( SndCount[id] > SND_MAX )
+			if ( SndCount[id] - 3 < SND_MAX )
 			{
-				if ( SndCount[id] - 3 < SND_MAX )
-				{
-					client_print(id, print_chat, "Sank Sounds >> You were warned, you are muted")
-					
-					// player is already muted, we increament here to save a variable to protect player from "you are muted" spam ( only 3 warnings )
-					++SndCount[id]
-				}
+				client_print(id, print_chat, "Sank Sounds >> You were warned, you are muted")
 				
-				exceeded = 1
-			}else if ( SndCount[id] >= SND_WARN )
-				client_print(id, print_chat, "Sank Sounds >> You have %d left before you get muted", SND_MAX - SndCount[id])
-		}
-		
-		if ( SND_MAX_DUR != 0.0 )
-		{
-			if ( SndLenghtCount[id] > SND_MAX_DUR )
-			{
-				exceeded = 1
+				// player is already muted, we increament here to save a variable to protect player from "you are muted" spam ( only 3 warnings )
+				++SndCount[id]
 			}
-		}
-		
-		if ( exceeded )
+			
 			return 1
+		}else if ( SndCount[id] >= SND_WARN )
+			client_print(id, print_chat, "Sank Sounds >> You have %d left before you get muted", SND_MAX - SndCount[id])
 	}
+	
+	if ( SND_MAX_DUR != 0.0
+		&& SndLenghtCount[id] > SND_MAX_DUR )
+		return 1
 	
 	return 0
 }
@@ -1915,16 +1919,12 @@ ErrorCheck( )
 			SND_WARN = SND_MAX - 1
 		
 		if ( SND_MAX < SND_WARN  )
-		{
 			// And finally, if they want to warn after a person has been
 			// muted, that's silly, so we'll fix it.
 			log_amx("Sank Sounds >> SND_WARN cannot be higher than SND_MAX")
-			log_amx("Sank Sounds >> SND_WARN set to default value")
-		}else
-		{
+		else
 			log_amx("Sank Sounds >> SND_WARN cannot be set to zero")
-			log_amx("Sank Sounds >> SND_WARN set to default value")
-		}
+		log_amx("Sank Sounds >> SND_WARN set to default value")
 	}
 }
 
@@ -1938,35 +1938,39 @@ playsoundall( sound[], split_dead_alive = 0 , sender_alive_status = 0 )
 	new alive
 	for( new i = 1; i <= g_max_players; ++i )
 	{
-		if ( is_user_connected(i)
-			&& !is_user_bot(i) )
+		if ( !is_user_connected(i) )
+			continue
+		
+		if ( is_user_bot(i) )
+			continue
+		
+		if ( !SndOn[i] )
+			continue
+		
+		alive = is_user_alive(i)
+		if ( !(SND_MODE & ( alive * 4 + 4 )) )
+			continue
+		
+		if ( split_dead_alive )
 		{
-			if ( SndOn[i] )
+			if ( alive == sender_alive_status		// make sure if splited both are in same group
+				|| SND_MODE & ( alive * 32 + 32 ) )	// OR check if different groups may hear each other
 			{
-				alive = is_user_alive(i)
-				if ( SND_MODE & ( alive * 4 + 4 ) )
-				{
-					if ( split_dead_alive )
-					{
-						if ( alive == sender_alive_status		// make sure if splited both are in same group
-							|| SND_MODE & ( alive * 32 + 32 ) )	// OR check if different groups may hear each other
-						{
-							if ( is_mp3 )
-								client_cmd(i, "mp3 play ^"%s^"", sound)
-							else if ( no_subfolder )
-								client_cmd(i, "play ^"%s^"", sound)
-							else
-								client_cmd(i, "spk ^"%s^"", sound)
-						}
-					}else
-					{
-						if ( is_mp3 )
-							client_cmd(i, "mp3 play ^"%s^"", sound)
-						else
-							client_cmd(i, "spk ^"%s^"", sound)
-					}
-				}
+				if ( is_mp3 )
+					client_cmd(i, "mp3 play ^"%s^"", sound)
+				else if ( no_subfolder )
+					client_cmd(i, "play ^"%s^"", sound)
+				else
+					client_cmd(i, "spk ^"%s^"", sound)
 			}
+		}else
+		{
+			if ( is_mp3 )
+				client_cmd(i, "mp3 play ^"%s^"", sound)
+			else if ( no_subfolder )
+				client_cmd(i, "play ^"%s^"", sound)
+			else
+				client_cmd(i, "spk ^"%s^"", sound)
 		}
 	}
 }
@@ -1990,7 +1994,7 @@ print_sound_list( id , motd_msg = 0 )
 	for ( i = 0; i < MAX_KEYWORDS && skip_for_loop == 0; ++i )
 	{
 		// If an invalid string, then break this loop
-		if( strlen(WordWavCombo[i]) == 0
+		if ( strlen(WordWavCombo[i]) == 0
 			|| strlen(WordWavCombo[i]) > TOK_LENGTH )
 			break
 		
@@ -2019,7 +2023,7 @@ print_sound_list( id , motd_msg = 0 )
 		}
 		if ( !found_stricted )
 		{
-			if( j % NUM_PER_LINE == NUM_PER_LINE - 1 )
+			if ( j % NUM_PER_LINE == NUM_PER_LINE - 1 )
 			{
 				// We got NUM_PER_LINE on this line,
 				// so print it and start on the next line
@@ -2039,9 +2043,10 @@ print_sound_list( id , motd_msg = 0 )
 			}
 		}
 	}
-	if ( motd_msg && strlen(motd_buffer) )
+	if ( motd_msg
+		&& strlen(motd_buffer) )
 		show_motd(id, motd_buffer)
-	else if( strlen(text) )
+	else if ( strlen(text) )
 		client_print(id, print_console, text)
 }
 
@@ -2069,8 +2074,8 @@ stock fstrcmp( str1[] , str2[] )
 		{
 			if ( str1[i] > str2[i] )
 				return 1
-			else
-				return -1
+			
+			return -1
 		}
 	}
 	
@@ -2150,7 +2155,8 @@ Float:get_wav_duration( wav_file[] )
 		dummy_input = fgetc(file)
 		if ( dummy_input == 'd' )
 			++data_found
-		else if ( dummy_input == 'a' && data_found == 1 )
+		else if ( dummy_input == 'a'
+			&& data_found == 1 )
 			++data_found
 		else if ( dummy_input == 't' )
 			++data_found
@@ -2186,27 +2192,26 @@ Float:get_mp3_duration( mp3_file[] )
 	{
 		byte = fgetc(file)
 		++file_pos
-		if ( byte == 255 )
+		if ( byte != 255 )
+			continue
+		
+		byte = fgetc(file)
+		++file_pos
+		if ( ( byte / 16 ) != 15
+			|| byte == 255 )
+			continue
+		
+		//if ( fgetc(file) > 80 )
+		//if ( fgetc(file) > 0 )
+		//if ( fgetc(file) > 40 )
+		if ( fgetc(file) > 16 )
 		{
-			byte = fgetc(file)
+			// header starts with hex: FF YY XX
+			// YY must be YY modulo 16 = 15, but NOT equal 255 (mostly it is FB or F3)
+			fseek(file, file_pos, SEEK_SET);
+			found_header = 1
+		}else
 			++file_pos
-			if ( ( byte / 16 ) == 15
-				&& byte != 255 )
-			{
-				//if ( fgetc(file) > 80 )
-				//if ( fgetc(file) > 0 )
-				//if ( fgetc(file) > 40 )
-				if ( fgetc(file) > 16 )
-				{
-					// header starts with hex: FF YY XX
-					// YY must be YY modulo 16 = 15, but NOT equal 255 (mostly it is FB or F3)
-					fseek(file, file_pos, SEEK_SET);
-					found_header = 1
-				}else
-					++file_pos
-			}
-				
-		}
 	}while ( !found_header )
 	
 	// position of first frame header......
@@ -2223,11 +2228,11 @@ Float:get_mp3_duration( mp3_file[] )
 	new layer = 4 - ( ( ( ( byte % 16 ) / 4 ) % 2 ) * 2 + ( ( ( byte % 16 ) % 4 ) / 2 ) )
 	
 #if DEBUG_MODE == 1
-	server_print("Sank Sounds >> DEBUG for file ^"%s^"", mp3_file)
-	server_print("Sank Sounds >> byte = %i", byte)
-	server_print("Sank Sounds >> file_pos = %i", file_pos)
-	server_print("Sank Sounds >> mpeg_version = %i", mpeg_version)
-	server_print("Sank Sounds >> layer = %i", layer)
+	log_amx("Sank Sounds >> DEBUG for file ^"%s^"", mp3_file)
+	log_amx("Sank Sounds >> byte = %i", byte)
+	log_amx("Sank Sounds >> file_pos = %i", file_pos)
+	log_amx("Sank Sounds >> mpeg_version = %i", mpeg_version)
+	log_amx("Sank Sounds >> layer = %i", layer)
 #endif
 	
 	//get next byte to read 3rd byte of header. 
@@ -2245,14 +2250,14 @@ Float:get_mp3_duration( mp3_file[] )
 		0, 32, 40, 48,  56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 0,	// Layer III
 	}
 #if DEBUG_MODE == 1
-	server_print("Sank Sounds >> byte = %i", byte)
-	server_print("Sank Sounds >> bitrate_table index = %i", (mpeg_version * ( 3 * 16 ) + ( layer - 1 ) * 16 + ( byte / 16 )))
+	log_amx("Sank Sounds >> byte = %i", byte)
+	log_amx("Sank Sounds >> bitrate_table index = %i", (mpeg_version * ( 3 * 16 ) + ( layer - 1 ) * 16 + ( byte / 16 )))
 #endif
 	
 	new mp3_bitrate = bitrate_table[mpeg_version * ( 3 * 16 ) + ( layer - 1 ) * 16 + ( byte / 16 )]
 	
 #if DEBUG_MODE == 1
-	server_print("Sank Sounds >> mp3_bitrate = %i", mp3_bitrate)
+	log_amx("Sank Sounds >> mp3_bitrate = %i", mp3_bitrate)
 #endif
 	
 	// frequency info
