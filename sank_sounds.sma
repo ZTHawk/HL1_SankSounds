@@ -284,6 +284,11 @@
 *	- changed:
 *		- SND_JOIN and SND_JOIN do not have to be before any other keyword
 *
+* v1.6.6b: (29.03.2009)
+*	- fixed:
+*		- runtime error
+*		- if SND_JOIN or SND_JOIN was not at the beginning and more sounds were added afterwards, those new sounds overwrote previous sounds
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -392,7 +397,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.6.6"
+#define PLUGIN_VERSION		"1.6.6b"
 
 new Enable_Sound[] =	"misc/woohoo.wav"	// Sound played when Sank Soounds being enabled
 new Disable_Sound[] =	"misc/awwcrap.wav"	// Sound played when Sank Soounds being disabled
@@ -1423,7 +1428,7 @@ public HandleSay( id )
 				
 				LastSoundTime = gametime
 			}
-		}
+		}else client_print(id, print_chat, "Sank Sounds >> XXX")
 	}else if ( gametime <= NextSoundTime + SND_DELAY
 		&& obey_duration_mode != 0 )
 		client_print(id, print_chat, "Sank Sounds >> Sound is still playing ( wait %3.1f seconds )", NextSoundTime + SND_DELAY - gametime)
@@ -1629,9 +1634,11 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 					}
 					
 					new result = array_add_element(ListIndex, temp_str)
-					if ( result == -2 )
+					if ( result > -1 )
+					{
 						tmpIndex = result
-					else
+						--ListIndex
+					}else
 					{
 						tmpIndex = -1
 						if ( result == -1 )
@@ -1676,7 +1683,11 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 					}
 					case PARSE_KEYWORD:
 					{
-						new error_value = array_add_inner_element(ListIndex, i - 1, temp_str, allow_check_existence, allow_global_precache, precache_sounds, allowed_to_precache)
+						new error_value = -1
+						if ( tmpIndex != -1 )
+							error_value = array_add_inner_element(tmpIndex, i - 1, temp_str, allow_check_existence, allow_global_precache, precache_sounds, allowed_to_precache)
+						else
+							error_value = array_add_inner_element(ListIndex, i - 1, temp_str, allow_check_existence, allow_global_precache, precache_sounds, allowed_to_precache)
 						if ( error_value == -1 )
 						{
 							// sound could not be added, so clear that array entry
