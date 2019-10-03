@@ -1580,17 +1580,13 @@ public HandleSay( id )
 			--timeout )				// Update each iteration
 		{
 			rand = random(sData[SOUND_AMOUNT])
-			// If for some reason we never find a file
-			//  then default to the first Sound entry
-			if ( !timeout )
-				rand = 0
-			
 			ArrayGetArray(sData[SUB_INDEX], rand, subData)
 			// check if sound has access defined, if so only allow admins to use it
 			if ( subData[ADMIN_LEVEL] == 0
 				|| ( get_user_flags(id) & subData[ADMIN_LEVEL] ) )
 			{
 				foundFile = true
+				break;
 			}
 		}
 		if ( foundFile )
