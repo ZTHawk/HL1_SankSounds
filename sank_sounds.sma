@@ -276,6 +276,14 @@
 *	- changed:
 *		- removed warning for unsupported mp3s (they are supported)
 *
+* v1.6.6: (03.03.2009)
+*	- fixed:
+*		- last entry in configfile was not sorted
+*		- runtime error with keywords without any sound
+*		- exploit where SND_JOIN and SND_EXIT could be used as keywords
+*	- changed:
+*		- SND_JOIN and SND_JOIN do not have to be before any other keyword
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -384,7 +392,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.6.5b"
+#define PLUGIN_VERSION		"1.6.6"
 
 new Enable_Sound[] =	"misc/woohoo.wav"	// Sound played when Sank Soounds being enabled
 new Disable_Sound[] =	"misc/awwcrap.wav"	// Sound played when Sank Soounds being disabled
@@ -1114,7 +1122,7 @@ public amx_sound_debug( id , level , cid )
 	new i, j, join_snd_buff[BUFFER_LEN], exit_snd_buff[BUFFER_LEN]
 	
 	if ( !is_dedicated_server()
-		&& id == 1 )	// for listenserver and id = 1 we can use server_print
+		&& id == 1 )	// for listenserver and with id = 1 we can use server_print
 		id = 0
 	
 	if ( id )
@@ -1340,6 +1348,10 @@ public HandleSay( id )
 	// Check to see if what the player said is a trigger for a sound
 	for ( new i = 2; i < MAX_KEYWORDS; ++i )	// first 2 elements are reserved for Join / Exit sounds
 	{
+		// end of list reached
+		if ( sound_data[i][KEYWORD][0] == 0 )
+			break;
+		
 		if ( equali(Speech, sound_data[i][KEYWORD])
 			|| ( EXACT_MATCH == 0
 				&& containi(Speech, sound_data[i][KEYWORD]) != -1 ) )
@@ -1356,6 +1368,7 @@ public HandleSay( id )
 	// check If player used NO sound trigger
 	if ( ListIndex == -1 )
 		return PLUGIN_CONTINUE
+	
 	new obey_duration_mode = get_pcvar_num(CVAR_obey_duration)
 	new admin_flags = get_user_flags(id)
 	new Float:gametime = get_gametime()
@@ -1455,6 +1468,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 	
 	new i
 	new ListIndex = -1
+	new tmpIndex = -1
 	new maxLineBuf_len = ( BUFFER_LEN + TOK_LENGTH ) - 1
 	new strLineBuf[BUFFER_LEN + TOK_LENGTH]
 		
@@ -1614,8 +1628,15 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 						break
 					}
 					
-					if ( array_add_element(ListIndex, temp_str) == 0 )
-						ListIndex = 2
+					new result = array_add_element(ListIndex, temp_str)
+					if ( result == -2 )
+						tmpIndex = result
+					else
+					{
+						tmpIndex = -1
+						if ( result == -1 )
+							ListIndex = 2
+					}
 				}
 			}else
 			{
@@ -1659,7 +1680,10 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 						if ( error_value == -1 )
 						{
 							// sound could not be added, so clear that array entry
-							array_clear_inner_element(ListIndex, i - 1)
+							if ( tmpIndex != -1 )
+								array_clear_inner_element(tmpIndex, i - 1)
+							else
+								array_clear_inner_element(ListIndex, i - 1)
 							
 							continue
 						}
@@ -1699,6 +1723,17 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 	
 	fclose(file)
 	
+	if ( ListIndex != -1 )
+	{
+		if ( sound_data[ListIndex][SOUND_AMOUNT] == 0
+			&& !(sound_data[ListIndex][FLAGS] & FLAG_IGNORE_AMOUNT) )	// check if allowed to ignore amount of sounds ( eg: SND_JOIN / SND_EXIT )
+		{
+			log_amx("Sank Sounds >> Found keyword without any valid sound. Skipping this keyword: ^"%s^"", sound_data[ListIndex][KEYWORD])
+			sound_data[ListIndex][KEYWORD][0] = 0
+			--ListIndex
+		}
+	}
+	
 	// Now we have all of the data from the text file in our data structures.
 	// Next we do some error checking, some setup, and we're done parsing!
 	ErrorCheck()
@@ -1713,7 +1748,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 	//++ListIndex
 #if ALLOW_SORT == 1
 	if ( ListIndex > 1 )
-		sort_HeapSort(ListIndex - 2)	// -2 cause first two are reserved for join/exit sounds
+		sort_HeapSort(ListIndex - 1)	// -2 cause first two are reserved for join/exit sounds
 #endif
 }
 
@@ -2020,23 +2055,46 @@ array_switch_elements( element_one , element_two )
 
 array_add_element( num , keyword[] )
 {
-	new join_exit_check = ( equali(keyword, "SND_JOIN") || equali(keyword, "SND_EXIT") )
+	new join_check = equali(keyword, "SND_JOIN")
+	new exit_check = equali(keyword, "SND_EXIT")
 	// if index is 0 or 1 but not the correct keyword then make sure to save in correct array position
-	if ( join_exit_check == 0
-		&& ( num == 0
-			|| num == 1 ) )
+	if ( join_check == 0
+		&& exit_check == 0 )
 	{
-		join_exit_check = -1
-		num = 2
+		if ( num == 0
+			|| num == 1 )
+		{
+			join_check = -1
+			exit_check = -1
+			num = 2
+		}
+	}else
+	{
+		if ( num > 1 )
+		{
+			if ( join_check != 0 )
+			{
+				num = 0
+				exit_check = -1
+			}else if ( exit_check != 0 )
+			{
+				num = 1
+				join_check = -1
+			}
+		}
 	}
 	
-	if ( join_exit_check > 0 )
+	if ( join_check > 0
+		|| exit_check > 0 )
 		sound_data[num][FLAGS] |= FLAG_IGNORE_AMOUNT
 	sound_data[num][ADMIN_LEVEL_BASE] = cfg_parse_access(keyword)
 	copy(sound_data[num][KEYWORD], TOK_LENGTH, keyword)
 	sound_data[num][PLAY_COUNT_KEY] = 0
 	
-	return (join_exit_check == -1) ? 0 : 1
+	return (join_check == -1 && exit_check == -1)
+		? -1
+		: (join_check == -1 || exit_check == -1)
+			? num : -2
 }
 
 array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , allow_global_precache = 0 , precache_sounds = 0 , allowed_to_precache = 0 )
