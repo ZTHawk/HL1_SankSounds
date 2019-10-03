@@ -151,6 +151,12 @@
 *		- keyword check tweaked
 *		- amx_sound_ban now do not expect additional parameter "on / off" or "1 / 0"
 *
+* v1.4.7:
+*	- fixed:
+*		- keywords with admin and public sounds, could block normal players from playing normal sounds
+*		- runtime error which could stop plugin to work
+*		- message telling players to wait till next sound can be played is not displayed on every word anymore
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -258,7 +264,7 @@ new Disable_Sound[] =	"misc/awwcrap.wav"		// Sound played when Sank Soounds disa
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 new plugin_author[] = "White Panther, Luke Sankey, HunteR"
-new plugin_version[] = "1.4.5"
+new plugin_version[] = "1.4.7"
 
 new FILENAME[128]
 
@@ -1078,7 +1084,6 @@ public amx_sound_unban( id , level , cid )
 //////////////////////////////////////////////////////////////////////////////
 public HandleSay( id )
 {
-	new ListIndex = -1
 	// If sounds are not enabled, then skip this whole thing
 	if ( !bSoundsEnabled )
 		return PLUGIN_CONTINUE
@@ -1107,33 +1112,34 @@ public HandleSay( id )
 		return PLUGIN_HANDLED
 	}
 	
-	if ( get_gametime() - LastSoundTime < SND_DELAY )
-		client_print(id, print_chat, "Sank Sounds Plugin >> Minimum sound delay time (%3.1f second(s)) not reached yet", SND_DELAY)
-	else
+	new ListIndex = -1
+	// Check to see if what the player said is a trigger for a sound
+	new i, Text[TOK_LENGTH+1], block_admin_sound
+	for ( i = 0; i < MAX_KEYWORDS; i++ )
 	{
-		// Check to see if what the player said is a trigger for a sound
-		new i, Text[TOK_LENGTH+1], block_admin_sound
-		for ( i = 0; i < MAX_KEYWORDS; i++ )
-		{
-			copy(Text, TOK_LENGTH, WordWavCombo[i])
-			
-			// Remove the possible @ sign from beginning (for admins only)
-			if ( Text[0] == '@' )
-			{
-				if ( !( get_user_flags(id) & ACCESS_ADMIN ) )
-					block_admin_sound = 1
-				replace(Text, TOK_LENGTH, "@", "")
-			}
-			if ( equali(Speech, Text) || ( EXACT_MATCH == 0 && containi(Speech, Text) != -1 ) )
-			{
-				if ( !block_admin_sound )
-					ListIndex = i
-				break
-			}
-		}
+		copy(Text, TOK_LENGTH, WordWavCombo[i])
 		
-		// If what the player said is a sound trigger, then handle it
-		if ( ListIndex != -1 )
+		// Remove the possible @ sign from beginning (for admins only)
+		if ( Text[0] == '@' )
+		{
+			if ( !( get_user_flags(id) & ACCESS_ADMIN ) )
+				block_admin_sound = 1
+			replace(Text, TOK_LENGTH, "@", "")
+		}
+		if ( equali(Speech, Text) || ( EXACT_MATCH == 0 && containi(Speech, Text) != -1 ) )
+		{
+			if ( !block_admin_sound )
+				ListIndex = i
+			break
+		}
+		block_admin_sound = 0
+	}
+	// If what the player said is a sound trigger, then handle it
+	if ( ListIndex != -1 )
+	{
+		if ( get_gametime() - LastSoundTime <= SND_DELAY )
+			client_print(id, print_chat, "Sank Sounds Plugin >> Minimum sound delay time (%3.1f second(s)) not reached yet", SND_DELAY)
+		else
 		{
 #if DEBUG
 			new name[33]
@@ -1312,6 +1318,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 					
 					new to_replace[127]
 					format(to_replace, 127, "%s%s", temp_str, check_for_semi ? ";" : "")
+					
 					replace(strLineBuf, MAX_RANDOM*TOK_LENGTH, to_replace, "")
 					
 					// Now remove any spaces or tabs from around the strings -- clean them up
@@ -1355,6 +1362,13 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 							{
 								log_amx("Sank Sounds Plugin >> Trying to load a file that dont exist. Skipping this file: ^"%s^"", file_name)
 								i--
+								
+								if ( !strlen(strLineBuf) )
+								{
+									strLineBuf[0] = 0
+									break
+								}
+								
 								continue
 							}
 							
