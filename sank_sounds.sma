@@ -315,6 +315,13 @@
 *	- fixed:
 *		- WAVs not downloading and producing error messages
 *
+* v1.8.0: (11.01.2012)
+*	- fixed:
+*		- adding new sounds with console command could add it but not being available
+*	- changed:
+*		- dynamic arrays are now used to store key/sound data to remove key limit
+*		- saving to default config file is now allowed
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -324,7 +331,7 @@
 *
 *	b) File has to look like this:
 *		SND_MAX;		20
-*		SND_MAX_DUR;		180.0
+*		SND_MAX_DUR;	180.0
 *		SND_WARN;		17
 *		SND_JOIN;		misc/hi.wav
 *		SND_EXIT;		misc/comeagain.wav
@@ -339,7 +346,7 @@
 *		crap;			misc/awwcrap.Wav;misc/awwcrap2.wav
 *		woohoo;			misc/woohoo.wav
 *		@ha ha;			misc/haha.wav
-*		@abm@godlike;		misc/godlike.wav
+*		@abm@godlike;	misc/godlike.wav
 *		doh;			misc/doh.wav;misc/doh2.wav;@misc/doh3.wav
 *		mp3;			sound/mymp3.mp3;music/mymp3s/number2.mp3;mainfolder.mp3
 *		target;			"target destroyed"
@@ -354,7 +361,7 @@
 *		haha2;			misc/haha.wav
 *		doh3;			misc/doh3.wav
 *		package 2
-*		hi;			misc/hi.wav
+*		hi;				misc/hi.wav
 *
 *		modspecific
 *		<keyword>;		<location>/<name>.wav
@@ -373,6 +380,10 @@
 *		mapname:
 *			- type mapname <space> the real mapname (without .bsp)
 *			- everthing below will be loaded only on this map
+*		mapnameonly:
+*			- type mapnameonly <space> the real mapname (without .bsp)
+*			- everthing below will be loaded only on this map
+*			- everthing below will be only available on this map
 *		package:
 *			- type package <space> number
 *			- everthing below will be loaded only once and switched to next package on map-change
@@ -411,12 +422,11 @@
 #define	ALLOW_SORT	1
 
 // Array Defines, ATTENTION: ( MAX_RANDOM + 1 ) * TOK_LENGTH must be smaller 2048 !!!
-#define MAX_KEYWORDS  80  // Maximum number of keywords ( ATTENTION: 2 are reserved )
-#define MAX_RANDOM    15  // Maximum number of sounds per keyword
+#define BUFFER_LEN    2048 // Maximum number of space per line to use when reading configfile
+#define MAX_RANDOM    15  // Maximum number of tries to find a sound file
 #define TOK_LENGTH    60  // Maximum length of keyword and sound file strings
 #define MAX_BANS      32  // Maximum number of bans stored
 #define NUM_PER_LINE  6   // Number of words per line from amx_sound_help
-#define BUFFER_LEN	TOK_LENGTH * MAX_RANDOM
 
 //#pragma dynamic 16384
 #pragma dynamic 65536
@@ -424,7 +434,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.7.1"
+#define PLUGIN_VERSION		"1.8.0"
 
 new Enable_Sound[] =  "misc/woohoo.wav"   // Sound played when Sank Soounds being enabled
 new Disable_Sound[] = "misc/awwcrap.wav"  // Sound played when Sank Soounds being disabled
@@ -482,7 +492,19 @@ enum
 
 enum
 {
-	FLAG_IGNORE_AMOUNT = 1
+	RESULT_OK = 1,
+	RESULT_BAD_ALIVE_STATUS = 0,
+	RESULT_QUOTA_EXCEEDED = -1,
+	RESULT_QUOTA_DURATION_EXCEEDED = -2,
+	RESULT_SOUND_DELAY = -3,
+	RESULT_ADMINS_ONLY = -4,
+}
+
+enum
+{
+	FLAG_IGNORE_AMOUNT = 1,
+	FLAGS_JOIN_SND = 2,
+	FLAGS_EXIT_SND = 4
 }
 
 enum
@@ -493,24 +515,24 @@ enum
 	SOUND_TYPE_WAV_LOCAL
 }
 
-enum SOUND_DATA_BASE
+enum _:SOUND_DATA_BASE
 {
 	KEYWORD[TOK_LENGTH],
 	ADMIN_LEVEL_BASE,
 	SOUND_AMOUNT,
 	FLAGS,
 	PLAY_COUNT_KEY,
-
-	KEY_SOUNDS[BUFFER_LEN],
-	Float:DURATION[MAX_RANDOM],
-	ADMIN_LEVEL[MAX_RANDOM],
-	SOUND_TYPE[MAX_RANDOM],
-	PLAY_COUNT[MAX_RANDOM],
-
-	SOUND_DATA_BASE_END
+	Array:SUB_INDEX
 }
-
-new sound_data[MAX_KEYWORDS][SOUND_DATA_BASE]
+enum _:SOUND_DATA_SUB
+{
+	SOUND_FILE[TOK_LENGTH],
+	Float:DURATION,
+	ADMIN_LEVEL,
+	SOUND_TYPE,
+	PLAY_COUNT
+}
+new Array:soundData
 
 public plugin_init( )
 {
@@ -540,6 +562,8 @@ public plugin_init( )
 	register_cvar("mp_sank_sounds_motd_address", "")
 	
 	g_max_players = get_maxplayers()
+	
+	soundData = ArrayCreate(SOUND_DATA_BASE)
 }
 
 public plugin_cfg( )
@@ -587,23 +611,25 @@ public client_putinserver( id )
 	if ( gametime <= get_pcvar_num(CVAR_freezetime) )
 		return
 	
-	if ( sound_data[0][SOUND_AMOUNT] == 0 )
+	new sData[SOUND_DATA_BASE]
+	ArrayGetArray(soundData, 0, sData)
+	if ( sData[SOUND_AMOUNT] == 0 )
 		return
 	
 	if ( Join_exit_SoundTime >= gametime )
 		return
 	
-	new rand = random(sound_data[0][SOUND_AMOUNT])
-	new playFile[TOK_LENGTH]
-	copy(playFile, TOK_LENGTH, sound_data[0][KEY_SOUNDS][TOK_LENGTH * rand])
+	new rand = random(sData[SOUND_AMOUNT])
+	new subData[SOUND_DATA_SUB]
+	ArrayGetArray(sData[SUB_INDEX], rand, subData)
 	
-	if ( sound_data[0][ADMIN_LEVEL][rand] != 0
-		&& !(get_user_flags(id) & sound_data[0][ADMIN_LEVEL][rand]) )
+	if ( subData[ADMIN_LEVEL] != 0
+		&& !(get_user_flags(id) & subData[ADMIN_LEVEL]) )
 		return
 	
-	playsoundall(playFile, sound_data[0][SOUND_TYPE][rand])
+	playsoundall(subData[SOUND_FILE], subData[SOUND_TYPE])
 	
-	Join_exit_SoundTime = gametime + sound_data[0][DURATION][rand]
+	Join_exit_SoundTime = gametime + subData[DURATION]
 	if ( NextSoundTime < Join_exit_SoundTime )
 		NextSoundTime = Join_exit_SoundTime
 }
@@ -617,23 +643,25 @@ public client_disconnect( id )
 	if ( gametime <= get_pcvar_num(CVAR_freezetime) )
 		return
 	
-	if ( sound_data[1][SOUND_AMOUNT] == 0 )
+	new sData[SOUND_DATA_BASE]
+	ArrayGetArray(soundData, 1, sData)
+	if ( sData[SOUND_AMOUNT] == 0 )
 		return
 	
 	if ( Join_exit_SoundTime >= gametime )
 		return
 	
-	new rand = random(sound_data[1][SOUND_AMOUNT])
-	new playFile[TOK_LENGTH]
-	copy(playFile, TOK_LENGTH, sound_data[1][KEY_SOUNDS][TOK_LENGTH * rand])
+	new rand = random(sData[SOUND_AMOUNT])
+	new subData[SOUND_DATA_SUB]
+	ArrayGetArray(sData[SUB_INDEX], rand, subData)
 	
-	if ( sound_data[1][ADMIN_LEVEL][rand] != 0
-		&& !(get_user_flags(id) & sound_data[1][ADMIN_LEVEL][rand]) )
+	if ( subData[ADMIN_LEVEL] != 0
+		&& !(get_user_flags(id) & subData[ADMIN_LEVEL]) )
 		return
 	
-	playsoundall(playFile, sound_data[1][SOUND_TYPE][rand])
+	playsoundall(subData[SOUND_FILE], subData[SOUND_TYPE])
 	
-	Join_exit_SoundTime = gametime + sound_data[1][DURATION][rand]
+	Join_exit_SoundTime = gametime + subData[DURATION]
 	if ( NextSoundTime < Join_exit_SoundTime )
 		NextSoundTime = Join_exit_SoundTime
 }
@@ -745,25 +773,24 @@ public amx_sound_add( id , level , cid )
 	
 	// Loop once for each keyword
 	new i, j
-	for( i = 0; i < MAX_KEYWORDS; ++i )
+	new sData[SOUND_DATA_BASE]
+	new subData[SOUND_DATA_SUB]
+	new aLen = ArraySize(soundData)
+	new subLen
+	for( i = 0; i < aLen; ++i )
 	{
-		// If an empty string, then break this loop
-		if ( strlen(sound_data[i][KEYWORD]) == 0 )
-			break
-		
+		ArrayGetArray(soundData, 0, sData)
 		// If no match found, keep looping
-		if ( !equal(Word, sound_data[i][KEYWORD], TOK_LENGTH) )
+		if ( !equal(Word, sData[KEYWORD], TOK_LENGTH) )
 			continue
 		
 		// See if the Sound already exists
-		for( j = 0; j < MAX_RANDOM; ++j )
+		subLen = ArraySize(sData[SUB_INDEX])
+		for( j = 0; j < subLen; ++j )
 		{
-			// If an empty string, then break this loop
-			if ( strlen(sound_data[i][KEY_SOUNDS][TOK_LENGTH * j]) == 0 )
-				break
-			
+			ArrayGetArray(sData[SUB_INDEX], 0, subData)
 			// See if this is the same as the new Sound
-			if ( equali(Sound, sound_data[i][KEY_SOUNDS][TOK_LENGTH * j], TOK_LENGTH) )
+			if ( equali(Sound, subData[SOUND_FILE], TOK_LENGTH) )
 			{
 				client_print(id, print_console, "Sank Sounds >> ^"%s; %s^" already exists", Word, Sound)
 				
@@ -771,31 +798,18 @@ public amx_sound_add( id , level , cid )
 			}
 		}
 		
-		// If we reached the end, then there is no room
-		if ( j >= MAX_RANDOM - 1 )
-			client_print(id, print_console, "Sank Sounds >> No room for new Sound. Increase MAX_RANDOM and recompile")
-		else
-		{
-			// Word exists, but Sound is new to the list, so add entry
-			array_add_inner_element(i, j, Sound)
-			
-			client_print(id, print_console, "Sank Sounds >> ^"%s^" successfully added to ^"%s^"", Sound, Word)
-		}
+		// Word exists, but Sound is new to the list, so add entry
+		array_add_inner_element(i, j, Sound)
+		client_print(id, print_console, "Sank Sounds >> ^"%s^" successfully added to ^"%s^"", Sound, Word)
 		
 		return PLUGIN_HANDLED
 	}
 	
-	// If we reached the end, then there is no room
-	if ( i >= MAX_KEYWORDS )
-		client_print(id, print_console, "Sank Sounds >> No room for new Word/Sound combo. Increase MAX_KEYWORDS and recompile")
-	else
-	{
-		// Word/Sound combo is new to the list, so make a new entry
-		array_add_element(i, Word)
-		array_add_inner_element(i, j, Sound)
-		
-		client_print(id, print_console, "Sank Sounds >> ^"%s; %s^" successfully added", Word, Sound)
-	}
+	// Word/Sound combo is new to the list, so make a new entry
+	array_add_element(i, Word)
+	array_add_inner_element(i, 0, Sound)
+	ArraySort(soundData, "sortSoundDataFunc")
+	client_print(id, print_console, "Sank Sounds >> ^"%s; %s^" successfully added", Word, Sound)
 	
 	return PLUGIN_HANDLED
 }
@@ -900,8 +914,8 @@ public amx_sound_reload( id , level , cid )
 	new parsefile[128]
 	read_argv(1, parsefile, 127)
 	// Initialize sound_data array
-	for( new i = 0; i < MAX_KEYWORDS; ++i )
-		array_clear_element(i)
+	array_clear()
+	soundData = ArrayCreate(SOUND_DATA_BASE)
 	
 	parse_sound_file(parsefile, 0)
 	
@@ -940,39 +954,20 @@ public amx_sound_remove( id , level , cid )
 	
 	// Loop once for each keyWord
 	new iCurWord, jCurSound
-	for( iCurWord = 0; iCurWord < MAX_KEYWORDS; ++iCurWord )
+	new sData[SOUND_DATA_BASE]
+	new subData[SOUND_DATA_SUB]
+	new aLen = ArraySize(soundData)
+	new subLen
+	for( iCurWord = 0; iCurWord < aLen; ++iCurWord )
 	{
-		// If an empty string, then break this loop, we're at the end
-		if ( strlen(sound_data[iCurWord][KEYWORD]) == 0 )
-			break
-		
+		ArrayGetArray(soundData, iCurWord, sData)
 		// Look for a Word match
-		if ( !equali(Word, sound_data[iCurWord][KEYWORD], TOK_LENGTH) )
+		if ( !equali(Word, sData[KEYWORD], TOK_LENGTH) )
 			continue
 		
 		// If no Sound was specified, then remove the whole Word's entry
 		if ( strlen(Sound) == 0 )
 		{
-			// special check for join / exit keywords
-			if ( iCurWord < 2 )
-			{
-				// safe join / exit data
-				new temp_char = sound_data[iCurWord][KEYWORD][0]
-				new temp_flag = sound_data[iCurWord][FLAGS]
-				
-				// Delete the last data
-				array_clear_element(iCurWord)
-				
-				// restore data
-				sound_data[iCurWord][KEYWORD][0] = temp_char
-				sound_data[iCurWord][FLAGS] = temp_flag
-				
-				// We reached the end
-				client_print(id, print_console, "Sank Sounds >> %s successfully cleared", Word)
-				
-				return PLUGIN_HANDLED
-			}
-			
 			array_remove(iCurWord)
 			
 			client_print(id, print_console, "Sank Sounds >> %s successfully removed", Word)
@@ -981,17 +976,15 @@ public amx_sound_remove( id , level , cid )
 		}
 		
 		// Just remove the one Sound, if it exists
-		for( jCurSound = 0; jCurSound < MAX_RANDOM; ++jCurSound )
+		subLen = ArraySize(sData[SUB_INDEX])
+		for( jCurSound = 0; jCurSound < subLen; ++jCurSound )
 		{
-			// If an empty string, then break this loop, we're at the end
-			if ( !strlen(sound_data[iCurWord][KEY_SOUNDS][TOK_LENGTH * jCurSound]) )
-				break
-			
+			ArrayGetArray(sData[SUB_INDEX], iCurWord, subData)
 			// Look for a Sound match
-			if ( !equali(Sound, sound_data[iCurWord][KEY_SOUNDS][TOK_LENGTH * jCurSound], TOK_LENGTH) )
+			if ( !equali(Sound, subData[SOUND_FILE], TOK_LENGTH) )
 				continue
 			
-			if ( sound_data[iCurWord][SOUND_AMOUNT] == 1 )		// If this is the only Sound entry, then remove the entry altogether
+			if ( sData[SOUND_AMOUNT] == 1 )		// If this is the only Sound entry, then remove the entry altogether
 			{
 				array_remove(iCurWord)
 				
@@ -1030,24 +1023,20 @@ public amx_sound_write( id , level , cid )
 	new savefile[128]
 	
 	read_argv(1, savefile, 127)
-	if ( strlen(savefile) == 0 )
+	if ( strlen(savefile) <= 1 )
 	{
-		client_print(id, print_console, "Sank Sounds >> You must specify a filename")
-		
-		return PLUGIN_HANDLED
+		if ( strlen(savefile) == 1
+			&& savefile[0] == '!' )
+			copy(savefile, 127, config_filename)
+		else
+		{
+			client_print(id, print_console, "Sank Sounds >> You have not specified any filename. To save to default configfile use ! as filename/parameter.")
+			return PLUGIN_HANDLED
+		}
 	}
 	
-	// disallow to use same filename as the default config_filename
-	if ( equali(savefile, config_filename) )
-	{
-		client_print(id, print_console, "Sank Sounds >> Illegal write to default sound config file")
-		client_print(id, print_console, "Sank Sounds >> Specify a different filename")
-		
-		return PLUGIN_HANDLED
-	}
-	
-	new TimeStamp[128], name[33], Text[BUFFER_LEN + TOK_LENGTH]
-	new Textlen = BUFFER_LEN + TOK_LENGTH - 1
+	new TimeStamp[128], name[33], Text[64]
+	new Textlen = 63
 	get_user_name(id, name, 32)
 	get_time("%H:%M:%S %A %B %d, %Y", TimeStamp, 127)
 	
@@ -1072,14 +1061,26 @@ public amx_sound_write( id , level , cid )
 	formatex(Text, Textlen, "SND_WARN;^t^t%d^n", SND_WARN)
 	fputs(file, Text)
 	
-	new joinex_snd_buff[BUFFER_LEN]
-	cfg_write_keysound(0, joinex_snd_buff, BUFFER_LEN - 1)
-	formatex(Text, Textlen, "SND_JOIN;^t^t%s^n", joinex_snd_buff)
-	fputs(file, Text)
-	joinex_snd_buff[0] = 0
-	cfg_write_keysound(1, joinex_snd_buff, BUFFER_LEN - 1)
-	formatex(Text, Textlen, "SND_EXIT;^t^t%s^n", joinex_snd_buff)
-	fputs(file, Text)
+	new sData[SOUND_DATA_BASE]
+	new subData[SOUND_DATA_SUB]
+	ArrayGetArray(soundData, 0, sData);
+	new subLen = ArraySize(sData[SUB_INDEX])
+	fputs(file, "SND_JOIN;^t^t")
+	for ( new j = 0; j < subLen; ++j )
+	{
+		ArrayGetArray(sData[SUB_INDEX], j, subData);
+		cfg_write_keysound(file, subData)
+	}
+	fputc(file, '^n')
+	ArrayGetArray(soundData, 1, sData);
+	subLen = ArraySize(sData[SUB_INDEX])
+	fputs(file, "SND_EXIT;^t^t")
+	for ( new j = 0; j < subLen; ++j )
+	{
+		ArrayGetArray(sData[SUB_INDEX], j, subData);
+		cfg_write_keysound(file, subData)
+	}
+	fputc(file, '^n')
 	formatex(Text, Textlen, "SND_DELAY;^t^t%f^n", SND_DELAY)
 	fputs(file, Text)
 	formatex(Text, Textlen, "SND_MODE;^t^t%d^n", SND_MODE)
@@ -1097,26 +1098,20 @@ public amx_sound_write( id , level , cid )
 	fputs(file, "^n")		// blank line
 	fputs(file, "# Word/Sound combinations:^n")
 	
-	for ( new i = 2; i < MAX_KEYWORDS; ++i )	// first 2 elements are reserved for Join / Exit sounds
+	new aLen = ArraySize(soundData)
+	new j
+	for ( new i = 2; i < aLen; ++i )	// first 2 elements are reserved for Join / Exit sounds
 	{
-		// See if we reached the end
-		if ( strlen(sound_data[i][KEYWORD]) == 0 )
-			break
+		ArrayGetArray(soundData, i, sData);
 		
-		cfg_write_keyword(i, Text, Textlen)
-		cfg_write_keysound(i, Text, Textlen)
-		
-		new text_len = strlen(Text)
-		if ( text_len + 2 <= BUFFER_LEN )
+		cfg_write_keyword(file, sData)
+		subLen = ArraySize(sData[SUB_INDEX])
+		for ( j = 0; j < subLen; ++j )
 		{
-			Text[text_len] = '^n'	// add new line
-			Text[text_len + 1] = 0
+			ArrayGetArray(sData[SUB_INDEX], j, subData);
+			cfg_write_keysound(file, subData)
 		}
-		
-		// Now write the formatted string to the file
-		fputs(file, Text)
-		
-		// And loop for the next Sound
+		fputc(file, '^n')
 	}
 	
 	fclose(file)
@@ -1148,21 +1143,28 @@ public amx_sound_debug( id , level , cid )
 	if ( id )
 		client_print(id, print_console, "SND_WARN: %d^nSND_MAX: %d^nSND_MAX_DUR: %5.1f^n", SND_WARN, SND_MAX, SND_MAX_DUR)
 	else
-		server_print("SND_WARN: %d^nSND_MAX: %d^nSND_MAX_DUR: %5.1f^n", SND_WARN, SND_MAX, SND_MAX_DUR)
+		server_print("SND_WARN: %d^nSND_MAX: %d^nSND_MAX_DUR: %5.1f", SND_WARN, SND_MAX, SND_MAX_DUR)
 	
-	for( i = 0; i < MAX_RANDOM; ++i )
+	new sData[SOUND_DATA_BASE]
+	new subData[SOUND_DATA_SUB]
+	new aLen = ArraySize(soundData)
+	new subLen
+	ArrayGetArray(soundData, 0, sData)
+	subLen = ArraySize(sData[SUB_INDEX])
+	new tempstr[TOK_LENGTH]
+	for( i = 0; i < subLen; ++i )
 	{
-		new tempstr[TOK_LENGTH]
-		if ( strlen(sound_data[0][KEY_SOUNDS][TOK_LENGTH * i]) )
-		{
-			formatex(tempstr, TOK_LENGTH, "%s;", sound_data[0][KEY_SOUNDS][TOK_LENGTH * i])
-			add(join_snd_buff, BUFFER_LEN, tempstr)
-		}
-		if ( strlen(sound_data[1][KEY_SOUNDS][TOK_LENGTH * i]) )
-		{
-			formatex(tempstr, TOK_LENGTH, "%s;", sound_data[1][KEY_SOUNDS][TOK_LENGTH * i])
-			add(exit_snd_buff, BUFFER_LEN, tempstr)
-		}
+		ArrayGetArray(sData[SUB_INDEX], i, subData)
+		formatex(tempstr, TOK_LENGTH, "%s;", subData[SOUND_FILE])
+		add(join_snd_buff, BUFFER_LEN, tempstr)
+	}
+	ArrayGetArray(soundData, 1, sData)
+	subLen = ArraySize(sData[SUB_INDEX])
+	for( i = 0; i < subLen; ++i )
+	{
+		ArrayGetArray(sData[SUB_INDEX], i, subData)
+		formatex(tempstr, TOK_LENGTH, "%s;", subData[SOUND_FILE])
+		add(exit_snd_buff, BUFFER_LEN, tempstr)
 	}
 	
 	new snd_imm_str[32]
@@ -1175,34 +1177,33 @@ public amx_sound_debug( id , level , cid )
 		client_print(id, print_console, "ADMINS_ONLY: %d^nDISPLAY_KEYWORDS: %d", ADMINS_ONLY, DISPLAY_KEYWORDS)
 	}else
 	{
-		server_print("SND_JOIN: %s^n", join_snd_buff)
-		server_print("SND_EXIT: %s^n", exit_snd_buff)
-		server_print("SND_DELAY: %f^nSND_MODE: %d^nSND_IMMUNITY: %s^nEXACT_MATCH: %d^n", SND_DELAY, SND_MODE, snd_imm_str, EXACT_MATCH)
-		server_print("ADMINS_ONLY: %d^nDISPLAY_KEYWORDS: %d^n", ADMINS_ONLY, DISPLAY_KEYWORDS)
+		server_print("SND_JOIN: %s", join_snd_buff)
+		server_print("SND_EXIT: %s", exit_snd_buff)
+		server_print("SND_DELAY: %f^nSND_MODE: %d^nSND_IMMUNITY: %s^nEXACT_MATCH: %d", SND_DELAY, SND_MODE, snd_imm_str, EXACT_MATCH)
+		server_print("ADMINS_ONLY: %d^nDISPLAY_KEYWORDS: %d", ADMINS_ONLY, DISPLAY_KEYWORDS)
 	}
 	
 	// Print out the matrix of sound data, so we got what we think we did
-	for( i = 2; i < MAX_KEYWORDS; ++i )	// first 2 elements are reserved for Join / Exit sounds
+	for( i = 2; i < aLen; ++i )	// first 2 elements are reserved for Join / Exit sounds
 	{
-		if ( strlen(sound_data[i][KEYWORD]) == 0 )
-			break
-
+		ArrayGetArray(soundData, i, sData)
+		
 		new access_level[32]
-		get_flags(sound_data[i][ADMIN_LEVEL_BASE], access_level, 31)
+		get_flags(sData[ADMIN_LEVEL_BASE], access_level, 31)
 		if ( id )
-			client_print(id, print_console, "^n[%d] ^"%s^" with %d sound%s and level ^"%s^" (played: %d)", i - 2, sound_data[i][KEYWORD], sound_data[i][SOUND_AMOUNT], sound_data[i][SOUND_AMOUNT] > 1 ? "s" : "", access_level, sound_data[i][PLAY_COUNT_KEY])
+			client_print(id, print_console, "^n[%d] ^"%s^" with %d sound%s and level ^"%s^" (played: %d)", i - 2, sData[KEYWORD], sData[SOUND_AMOUNT], sData[SOUND_AMOUNT] > 1 ? "s" : "", access_level, sData[PLAY_COUNT_KEY])
 		else
-			server_print("^n[%d] ^"%s^" with %d sound%s and level ^"%s^" (played: %d)", i - 2, sound_data[i][KEYWORD], sound_data[i][SOUND_AMOUNT], sound_data[i][SOUND_AMOUNT] > 1 ? "s" : "", access_level, sound_data[i][PLAY_COUNT_KEY])
-		for( j = 0; j < MAX_RANDOM; ++j )
+			server_print("^n[%d] ^"%s^" with %d sound%s and level ^"%s^" (played: %d)", i - 2, sData[KEYWORD], sData[SOUND_AMOUNT], sData[SOUND_AMOUNT] > 1 ? "s" : "", access_level, sData[PLAY_COUNT_KEY])
+		subLen = ArraySize(sData[SUB_INDEX])
+		for( j = 0; j < subLen; ++j )
 		{
-			if ( strlen(sound_data[i][KEY_SOUNDS][j * TOK_LENGTH]) == 0 )
-				continue
-
-			get_flags(sound_data[i][ADMIN_LEVEL][j], access_level, 31)
+			ArrayGetArray(sData[SUB_INDEX], j, subData)
+			
+			get_flags(subData[ADMIN_LEVEL], access_level, 31)
 			if ( id )
-				client_print(id, print_console, " ^"%s^" - time: %5.2f - admin level ^"%s^" (played: %d)", sound_data[i][KEY_SOUNDS][j * TOK_LENGTH], sound_data[i][DURATION][j], access_level, sound_data[i][PLAY_COUNT][j])
+				client_print(id, print_console, " ^"%s^" - time: %5.2f - admin level ^"%s^" (played: %d)", subData[SOUND_FILE], subData[DURATION], access_level, subData[PLAY_COUNT])
 			else
-				server_print(" ^"%s^" - time: %5.2f - admin level ^"%s^" (played: %d)", sound_data[i][KEY_SOUNDS][j * TOK_LENGTH], sound_data[i][DURATION][j], access_level, sound_data[i][PLAY_COUNT][j])
+				server_print(" ^"%s^" - time: %5.2f - admin level ^"%s^" (played: %d)", subData[SOUND_FILE], subData[DURATION], access_level, subData[PLAY_COUNT])
 		}
 	}
 	
@@ -1327,15 +1328,15 @@ public amx_sound_top( id , level , cid )
 	
 	new topIDs[50] = {-1, ...}
 	new topCount[50] = {0, ...}
-	for ( new keyIndex = 0; keyIndex < MAX_KEYWORDS; ++keyIndex )
+	new sData[SOUND_DATA_BASE]
+	new aLen = ArraySize(soundData)
+	for ( new keyIndex = 0; keyIndex < aLen; ++keyIndex )
 	{
-		// end of list reached
-		if ( sound_data[keyIndex][KEYWORD][0] == 0 )
-			break
+		ArrayGetArray(soundData, keyIndex, sData)
 		
 		for ( new i = 0; i < topX; ++i )
 		{
-			if ( sound_data[keyIndex][PLAY_COUNT_KEY] <= topCount[i] )
+			if ( sData[PLAY_COUNT_KEY] <= topCount[i] )
 				continue
 			
 			// copy all other down
@@ -1345,7 +1346,7 @@ public amx_sound_top( id , level , cid )
 				topCount[j] = topCount[j - 1]
 			}
 			topIDs[i] = keyIndex
-			topCount[i] = sound_data[keyIndex][PLAY_COUNT_KEY]
+			topCount[i] = sData[PLAY_COUNT_KEY]
 			break
 		}
 	}
@@ -1355,8 +1356,10 @@ public amx_sound_top( id , level , cid )
 	while ( counter < topX )
 	{
 		if ( topIDs[counter] != -1 )
-			format(text, 511, "%s(%d) %s^n", text, topCount[counter], sound_data[topIDs[counter]][KEYWORD])
-		else
+		{
+			ArrayGetArray(soundData, topIDs[counter], sData)
+			format(text, 511, "%s(%d) %s^n", text, topCount[counter], sData[KEYWORD])
+		}else
 			counter = topX - 1
 		if ( (counter % 10 == 0
 				&& counter != 0 )
@@ -1434,24 +1437,25 @@ public HandleSay( id )
 	
 	new ListIndex = -1
 	new pinToLocation = (Speech[speachLen - 1] == '!')
+	new sData[SOUND_DATA_BASE]
+	new subData[SOUND_DATA_SUB]
+	new aLen = ArraySize(soundData)
 	// Check to see if what the player said is a trigger for a sound
-	for ( new i = 2; i < MAX_KEYWORDS; ++i )	// first 2 elements are reserved for Join / Exit sounds
+	for ( new i = 2; i < aLen; ++i )	// first 2 elements are reserved for Join / Exit sounds
 	{
-		// end of list reached
-		if ( sound_data[i][KEYWORD][0] == 0 )
-			break
+		ArrayGetArray(soundData, i, sData)
 		
-		if ( equali(Speech, sound_data[i][KEYWORD])
+		if ( equali(Speech, sData[KEYWORD])
 			|| (EXACT_MATCH == 1
 				&& pinToLocation == 1
-				&& speachLen == strlen(sound_data[i][KEYWORD]) + 1
-				&& equali(Speech, sound_data[i][KEYWORD], speachLen - 1) )
+				&& speachLen == strlen(sData[KEYWORD]) + 1
+				&& equali(Speech, sData[KEYWORD], speachLen - 1) )
 			|| ( EXACT_MATCH == 0
-				&& containi(Speech, sound_data[i][KEYWORD]) != -1 ) )
+				&& containi(Speech, sData[KEYWORD]) != -1 ) )
 		{
 			// check for access
-			if ( sound_data[i][ADMIN_LEVEL_BASE] == 0
-				|| get_user_flags(id) & sound_data[i][ADMIN_LEVEL_BASE] )
+			if ( sData[ADMIN_LEVEL_BASE] == 0
+				|| get_user_flags(id) & sData[ADMIN_LEVEL_BASE] )
 				ListIndex = i
 			
 			break
@@ -1463,69 +1467,65 @@ public HandleSay( id )
 		return PLUGIN_CONTINUE
 	
 	new obey_duration_mode = get_pcvar_num(CVAR_obey_duration)
-	new admin_flags = get_user_flags(id)
 	new Float:gametime = get_gametime()
-	if ( gametime > NextSoundTime + SND_DELAY			// 1.  check for sound overlapping + delay time
-		|| ( admin_flags & ADMIN_RCON				// 2.  check if super admin
-			&& !(obey_duration_mode & 4) )			// 2b. check if super admin have to obey duration
-		|| ( admin_flags & SND_IMMUNITY				// 3.  check if admin
-			&& !(obey_duration_mode & 2) )			// 3b. check if admin have to obey duration
-		|| ( !(obey_duration_mode & 1)				// 4.  check if overlapping is allowed
-			&& gametime > LastSoundTime + SND_DELAY ) )	// 4b. or for delay time
+	new allowedToPlay = isUserAllowed2Play(id, gametime, obey_duration_mode)
+	if ( allowedToPlay == RESULT_OK )
 	{
-		// check if player is allowed to play sounds depending on config
-		new alive = is_user_alive(id)
-		if ( SND_MODE & ( alive + 1 )
-			&& !QuotaExceeded(id) )		// If the user has not exceeded their quota, then play a Sound
+		displayQuotaWarning(id)
+		new rand = random(sData[SOUND_AMOUNT])
+		new timeout
+		new playFile[TOK_LENGTH]
+		
+		// This for loop runs around until it finds a real file to play
+		// Defaults to the first Sound file, if no file is found at random.
+		for( timeout = MAX_RANDOM;			// Initial condition
+			timeout >= 0 && !strlen(playFile);	// While these are true
+			--timeout )				// Update each iteration
 		{
-			new rand = random(sound_data[ListIndex][SOUND_AMOUNT])
-			new timeout
-			new playFile[TOK_LENGTH]
+			rand = random(sData[SOUND_AMOUNT])
+			// If for some reason we never find a file
+			//  then default to the first Sound entry
+			if ( !timeout )
+				rand = 0
 			
-			// This for loop runs around until it finds a real file to play
-			// Defaults to the first Sound file, if no file is found at random.
-			for( timeout = MAX_RANDOM;			// Initial condition
-				timeout >= 0 && !strlen(playFile);	// While these are true
-				--timeout )				// Update each iteration
-			{
-				rand = random(sound_data[ListIndex][SOUND_AMOUNT])
-				// If for some reason we never find a file
-				//  then default to the first Sound entry
-				if ( !timeout )
-					rand = 0
-				
-				// check if sound has access defined, if so only allow admins to use it
-				if ( sound_data[ListIndex][ADMIN_LEVEL][rand] == 0
-					|| ( get_user_flags(id) & sound_data[ListIndex][ADMIN_LEVEL][rand] ) )
-					copy(playFile, TOK_LENGTH, sound_data[ListIndex][KEY_SOUNDS][rand * TOK_LENGTH])
-			}
-			
-			if ( playFile[0] )
-			{
-				NextSoundTime = gametime + sound_data[ListIndex][DURATION][rand]
-				
-				// Increment their playsound count
-				++SndCount[id]
-				SndLenghtCount[id] += sound_data[ListIndex][DURATION][rand]
-				
-				// increment counter
-				++sound_data[ListIndex][PLAY_COUNT_KEY]
-				++sound_data[ListIndex][PLAY_COUNT][rand]
-				
-				new type = sound_data[ListIndex][SOUND_TYPE][rand]
-				if ( pinToLocation == 1
-					&& type == SOUND_TYPE_WAV )
-					type = SOUND_TYPE_WAV_LOCAL
-				playsoundall(playFile, type, SND_MODE & 16, alive)
-				
-				LastSoundTime = gametime
-			}
+			ArrayGetArray(sData[SUB_INDEX], rand, subData)
+			// check if sound has access defined, if so only allow admins to use it
+			if ( subData[ADMIN_LEVEL] == 0
+				|| ( get_user_flags(id) & subData[ADMIN_LEVEL] ) )
+				copy(playFile, TOK_LENGTH, subData[SOUND_FILE])
 		}
-	}else if ( gametime <= NextSoundTime + SND_DELAY
-		&& obey_duration_mode != 0 )
-		client_print(id, print_chat, "Sank Sounds >> Sound is still playing ( wait %3.1f seconds )", NextSoundTime + SND_DELAY - gametime)
-	else
-		client_print(id, print_chat, "Sank Sounds >> Do not use sounds too often ( wait %3.1f seconds )", LastSoundTime + SND_DELAY - gametime)
+		
+		if ( playFile[0] )
+		{
+			NextSoundTime = gametime + subData[DURATION]
+			
+			// Increment their playsound count
+			++SndCount[id]
+			SndLenghtCount[id] += subData[DURATION]
+			
+			// increment counter
+			++sData[PLAY_COUNT_KEY]
+			++subData[PLAY_COUNT]
+			
+			new type = subData[SOUND_TYPE]
+			if ( pinToLocation == 1
+				&& type == SOUND_TYPE_WAV )
+				type = SOUND_TYPE_WAV_LOCAL
+			playsoundall(playFile, type, SND_MODE & 16, is_user_alive(id))
+			
+			LastSoundTime = gametime
+			ArraySetArray(sData[SUB_INDEX], rand, subData)
+			ArraySetArray(soundData, ListIndex, sData)
+		}
+	}else if ( !displayQuotaExceeded(id) )
+	{
+		if ( allowedToPlay == RESULT_SOUND_DELAY
+			&& obey_duration_mode != 0 )
+			client_print(id, print_chat, "Sank Sounds >> Sound is still playing ( wait %3.1f seconds )", NextSoundTime + SND_DELAY - gametime)
+		else if ( allowedToPlay != RESULT_QUOTA_EXCEEDED
+			&& allowedToPlay != RESULT_QUOTA_DURATION_EXCEEDED )
+			client_print(id, print_chat, "Sank Sounds >> Do not use sounds too often ( wait %3.1f seconds )", LastSoundTime + SND_DELAY - gametime)
+	}
 	
 	if ( DISPLAY_KEYWORDS == 0 )
 		return PLUGIN_HANDLED
@@ -1566,14 +1566,16 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 	new i
 	new ListIndex = -1
 	new tmpIndex = -1
-	new maxLineBuf_len = ( BUFFER_LEN + TOK_LENGTH ) - 1
-	new strLineBuf[BUFFER_LEN + TOK_LENGTH]
+	new maxLineBuf_len = BUFFER_LEN - 1
+	new strLineBuf[BUFFER_LEN]
 	
 	new error_code = ERROR_NONE
 	new parse_option = PARSE_KEYWORD
 	new temp_str[128]
 	new check_for_semi
 	new position
+	
+	new sData[SOUND_DATA_BASE]
 	
 	new file = fopen(loadfile, "r")
 	if ( !file )
@@ -1649,16 +1651,9 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 		if ( !allow_to_use_sounds )	// check for sounds that can be used only on specified map
 			continue
 		
-		if ( ListIndex >= MAX_KEYWORDS )
-		{
-			log_amx("Sank Sounds >> Sound list truncated. Increase MAX_KEYWORDS. Stopped parsing file ^"%s^"^n", loadfile)
-			
-			break
-		}
-		
 		error_code = ERROR_NONE
 		position = 0
-		for( i = 0; i < MAX_RANDOM; ++i )
+		for( i = 0; ; ++i )
 		{
 			// check if reached end of buffer ( input has been parsed )
 			if ( position >= strlen(strLineBuf) )
@@ -1713,19 +1708,16 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 				else
 				{
 					parse_option = PARSE_KEYWORD
+					if ( ListIndex != -1 )
+						ArrayGetArray(soundData, ListIndex, sData)
 					if ( ListIndex != -1
-						&& sound_data[ListIndex][SOUND_AMOUNT] == 0
-						&& !(sound_data[ListIndex][FLAGS] & FLAG_IGNORE_AMOUNT) )	// check if allowed to ignore amount of sounds ( eg: SND_JOIN / SND_EXIT )
-						log_amx("Sank Sounds >> Found keyword without any valid sound. Skipping this keyword: ^"%s^"", sound_data[ListIndex][KEYWORD])
-					else
-						++ListIndex
-					
-					if ( ListIndex >= MAX_KEYWORDS )
+						&& sData[SOUND_AMOUNT] == 0
+						&& !(sData[FLAGS] & FLAG_IGNORE_AMOUNT) )	// check if allowed to ignore amount of sounds ( eg: SND_JOIN / SND_EXIT )
 					{
-						error_code = ERROR_MAX_KEYWORDS
-						
-						break
-					}
+						log_amx("Sank Sounds >> Found keyword without any valid sound. Skipping this keyword: ^"%s^"", sData[KEYWORD])
+						array_remove(ListIndex)
+					}else
+						++ListIndex
 					
 					new result = array_add_element(ListIndex, temp_str)
 					if ( result > -1 )
@@ -1797,25 +1789,12 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 							error_value = array_add_inner_element(ListIndex, i - 1, temp_str, allow_check_existence, allow_global_precache, precache_sounds, allowed_to_precache)
 						if ( error_value == -1 )
 						{
-							// sound could not be added, so clear that array entry
-							if ( tmpIndex != -1 )
-								array_clear_inner_element(tmpIndex, i - 1)
-							else
-								array_clear_inner_element(ListIndex, i - 1)
-							
+							// sound could not be added
 							continue
 						}
 					}
 				}
 			}
-		}
-		
-		// Error occured so skip Word/Sound Combo
-		if ( error_code == ERROR_MAX_KEYWORDS )
-		{
-			log_amx("Sank Sounds >> Sound list truncated. Increase MAX_KEYWORDS. Stopped parsing file ^"%s^"^n", loadfile)
-			
-			break
 		}
 		
 		if ( error_code == ERROR_STRING_LENGTH )
@@ -1843,11 +1822,12 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 	
 	if ( ListIndex != -1 )
 	{
-		if ( sound_data[ListIndex][SOUND_AMOUNT] == 0
-			&& !(sound_data[ListIndex][FLAGS] & FLAG_IGNORE_AMOUNT) )	// check if allowed to ignore amount of sounds ( eg: SND_JOIN / SND_EXIT )
+		ArrayGetArray(soundData, ListIndex, sData)
+		if ( sData[SOUND_AMOUNT] == 0
+			&& !(sData[FLAGS] & FLAG_IGNORE_AMOUNT) )	// check if allowed to ignore amount of sounds ( eg: SND_JOIN / SND_EXIT )
 		{
-			log_amx("Sank Sounds >> Found keyword without any valid sound. Skipping this keyword: ^"%s^"", sound_data[ListIndex][KEYWORD])
-			sound_data[ListIndex][KEYWORD][0] = 0
+			log_amx("Sank Sounds >> Found keyword without any valid sound. Skipping this keyword: ^"%s^"", sData[KEYWORD])
+			array_remove(ListIndex)
 			--ListIndex
 		}
 	}
@@ -1866,7 +1846,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 	//++ListIndex
 #if ALLOW_SORT == 1
 	if ( ListIndex > 1 )
-		sort_HeapSort(ListIndex - 1)	// -2 cause first two are reserved for join/exit sounds
+		ArraySort(soundData, "sortSoundDataFunc")
 #endif
 }
 
@@ -1874,15 +1854,75 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 // Returns 0 if the user is allowed to say things
 // Returns 1 and mutes the user if the quota has been exceeded.
 //////////////////////////////////////////////////////////////////////////////
-QuotaExceeded( id )
+isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 {
-	// check if is admin
-	new admin_check = ( get_user_flags(id) & SND_IMMUNITY )
-	if ( ADMINS_ONLY && !admin_check )
-		return 1
+	// order of checks is important
 	
-	// If the sound limitation is disabled, then return happily.
-	if ( admin_check )
+	if ( SND_MAX != 0
+		&& SndCount[id] >= SND_MAX )
+		return RESULT_QUOTA_EXCEEDED
+	
+	if ( SND_MAX_DUR != 0.0
+		&& SndLenghtCount[id] > SND_MAX_DUR )
+		return RESULT_QUOTA_DURATION_EXCEEDED
+	
+	// check for sound overlapping + delay time
+	if ( gametime > NextSoundTime + SND_DELAY )
+		return RESULT_OK
+	
+	new admin_flags = get_user_flags(id)
+	// check if only admins can play sounds
+	if ( ADMINS_ONLY
+		&& !admin_flags )
+		return RESULT_ADMINS_ONLY
+	
+	// check if super admin
+	// and check if super admin have to obey duration
+	if ( admin_flags & ADMIN_RCON				
+		&& !(obey_duration_mode & 4) )
+		return RESULT_OK
+	
+	// check if player is allowed to play sounds depending on alive config
+	if ( !(SND_MODE & (is_user_alive(id) + 1)) )
+		return RESULT_BAD_ALIVE_STATUS
+	
+	// check if admin
+	// and check if admin have to obey duration
+	if ( admin_flags & SND_IMMUNITY
+		&& !(obey_duration_mode & 2) )
+		return RESULT_OK
+	
+	// check if overlapping is allowed
+	// or for delay time
+	if ( !(obey_duration_mode & 1)
+		&& gametime > LastSoundTime + SND_DELAY )
+		return RESULT_OK
+	
+	return RESULT_SOUND_DELAY
+}
+
+displayQuotaWarning( id )
+{
+	if ( ADMINS_ONLY
+		&& get_user_flags(id) & SND_IMMUNITY )
+		return
+	
+	if ( SND_MAX != 0 )
+	{
+		if ( SndCount[id] >= SND_WARN )
+		{
+			if ( SndCount[id] + 1 == SND_MAX )
+				client_print(id, print_chat, "Sank Sounds >> This was your last sound")
+			else
+				client_print(id, print_chat, "Sank Sounds >> You have %d left before you get muted", SND_MAX - SndCount[id] - 1)
+		}
+	}
+}
+
+displayQuotaExceeded( id )
+{
+	if ( ADMINS_ONLY
+		&& get_user_flags(id) & SND_IMMUNITY )
 		return 0
 	
 	if ( SND_MAX != 0 )
@@ -1896,21 +1936,9 @@ QuotaExceeded( id )
 				// player is already muted, we increament here to save a variable to protect player from "you are muted" spam ( only 3 warnings )
 				++SndCount[id]
 			}
-			
 			return 1
-		}else if ( SndCount[id] >= SND_WARN )
-		{
-			if ( SndCount[id] + 1 == SND_MAX )
-				client_print(id, print_chat, "Sank Sounds >> This was your last sound")
-			else
-				client_print(id, print_chat, "Sank Sounds >> You have %d left before you get muted", SND_MAX - SndCount[id] - 1)
 		}
 	}
-	
-	if ( SND_MAX_DUR != 0.0
-		&& SndLenghtCount[id] > SND_MAX_DUR )
-		return 1
-	
 	return 0
 }
 
@@ -2011,23 +2039,22 @@ print_sound_list( id , motd_msg = 0 )
 	
 	// Loop once for each keyword
 	new i, j = -1
-	for ( i = 2; i < MAX_KEYWORDS && skip_for_loop == 0; ++i )	// first 2 elements are reserved for Join / Exit sounds
+	new sData[SOUND_DATA_BASE]
+	new aLen = ArraySize(soundData)
+	for ( i = 2; i < aLen && skip_for_loop == 0; ++i )	// first 2 elements are reserved for Join / Exit sounds
 	{
-		// If an invalid string, then break this loop
-		if ( strlen(sound_data[i][KEYWORD]) == 0
-			|| strlen(sound_data[i][KEYWORD]) > TOK_LENGTH )
-			break
+		ArrayGetArray(soundData, i, sData)
 		
 		// check if player can see admin sounds
 		++j
 		new found_stricted = 0
-		if ( sound_data[i][ADMIN_LEVEL_BASE] == 0
-			|| get_user_flags(id) & sound_data[i][ADMIN_LEVEL_BASE] )
+		if ( sData[ADMIN_LEVEL_BASE] == 0
+			|| get_user_flags(id) & sData[ADMIN_LEVEL_BASE] )
 		{
 			if ( motd_msg )
-				ilen += format(motd_buffer[ilen], 2047 - ilen, "%s", sound_data[i][KEYWORD])
+				ilen += format(motd_buffer[ilen], 2047 - ilen, "%s", sData[KEYWORD])
 			else
-				add(text, 255, sound_data[i][KEYWORD])
+				add(text, 255, sData[KEYWORD])
 		}else
 		{
 			--j
@@ -2064,116 +2091,21 @@ print_sound_list( id , motd_msg = 0 )
 }
 
 #if ALLOW_SORT == 1
-// 4 functions for array sort ( by Bailopan ) ( customized to fit plugin )
-sort_HeapSort( ListIndex )
+public sortSoundDataFunc( Array:array , item1 , item2 , const data[] , data_size )
 {
-	new i
-	new aSize = ( ListIndex / 2 ) - 1
-	for ( i = aSize; i >= 0; --i )
-		sort_SiftDown(i, ListIndex - 1)
-	
-	for ( i = ListIndex - 1; i >= 1; --i )
-	{
-		array_switch_elements(0, i)
-		sort_SiftDown(0, i - 1)
-	}
-}
-
-sort_compare( elem1 , elem2 )
-{
-	// skip first 2 elements ( join / exit )
-	elem1 += 2
-	elem2 += 2
-	
-	new i = 0
-	for ( i = 0; i < TOK_LENGTH; ++i )
-	{
-		if ( sound_data[elem1][KEYWORD][i] != sound_data[elem2][KEYWORD][i] )
-		{
-			if ( sound_data[elem1][KEYWORD][i] > sound_data[elem2][KEYWORD][i] )
-				return 1
-			
-			return -1
-		}
-	}
-	
-	return 0
-}
-
-sort_SiftDown( root , bottom )
-{
-	new done, child
-	while ( ( root * 2 <= bottom ) && !done )
-	{
-		if ( root * 2 == bottom )
-			child = root * 2
-		else if ( sort_compare(root * 2, root * 2 + 1) > 0 )
-			child = root * 2
-		else
-			child = root * 2 + 1
-		
-		if ( sort_compare(root, child) < 0 )
-		{
-			array_switch_elements(root, child)
-			root = child
-		}else
-			done = 1
-	}
-}
-
-array_switch_elements( element_one , element_two )
-{
-	// skip first 2 elements ( join / exit )
-	element_one += 2
-	element_two += 2
-	
-	new i
-	new temp_sounds[BUFFER_LEN]
-	new temp_keyword[TOK_LENGTH]
-	new temp_int, Float:temp_float, temp_access, temp_access_base, temp_type, temp_flags, temp_play_count
-	
-	copy(temp_keyword, TOK_LENGTH, sound_data[element_one][KEYWORD])
-	for ( i = 0; i < BUFFER_LEN; ++i )
-		temp_sounds[i] = sound_data[element_one][KEY_SOUNDS][i]
-	temp_int = sound_data[element_one][SOUND_AMOUNT]
-	temp_access_base = sound_data[element_one][ADMIN_LEVEL_BASE]
-	temp_flags = sound_data[element_one][FLAGS]
-	temp_play_count = sound_data[element_one][PLAY_COUNT_KEY]
-	
-	copy(sound_data[element_one][KEYWORD], TOK_LENGTH, sound_data[element_two][KEYWORD])
-	for ( i = 0; i < BUFFER_LEN; ++i )
-		sound_data[element_one][KEY_SOUNDS][i] = sound_data[element_two][KEY_SOUNDS][i]
-	sound_data[element_one][SOUND_AMOUNT] = sound_data[element_two][SOUND_AMOUNT]
-	sound_data[element_one][ADMIN_LEVEL_BASE] = sound_data[element_two][ADMIN_LEVEL_BASE]
-	sound_data[element_one][FLAGS] = sound_data[element_two][FLAGS]
-	sound_data[element_one][PLAY_COUNT_KEY] = sound_data[element_two][PLAY_COUNT_KEY]
-	
-	copy(sound_data[element_two][KEYWORD], TOK_LENGTH, temp_keyword)
-	for ( i = 0; i < BUFFER_LEN; ++i )
-		sound_data[element_two][KEY_SOUNDS][i] = temp_sounds[i]
-	sound_data[element_two][SOUND_AMOUNT] = temp_int
-	sound_data[element_two][ADMIN_LEVEL_BASE] = temp_access_base
-	sound_data[element_two][FLAGS] = temp_flags
-	sound_data[element_two][PLAY_COUNT_KEY] = temp_play_count
-	
-	for ( i = 0; i < MAX_RANDOM; ++i )
-	{
-		temp_float = sound_data[element_one][DURATION][i]
-		sound_data[element_one][DURATION][i] = _:sound_data[element_two][DURATION][i]
-		sound_data[element_two][DURATION][i] = _:temp_float
-
-		temp_access = sound_data[element_one][ADMIN_LEVEL][i]
-		sound_data[element_one][ADMIN_LEVEL][i] = sound_data[element_two][ADMIN_LEVEL][i]
-		sound_data[element_two][ADMIN_LEVEL][i] = temp_access
-
-		temp_type = sound_data[element_one][SOUND_TYPE][i]
-		sound_data[element_one][SOUND_TYPE][i] = sound_data[element_two][SOUND_TYPE][i]
-		sound_data[element_two][SOUND_TYPE][i] = temp_type
-
-		temp_play_count = sound_data[element_one][PLAY_COUNT][i]
-		sound_data[element_one][PLAY_COUNT][i] = sound_data[element_two][PLAY_COUNT][i]
-		sound_data[element_two][PLAY_COUNT][i] = temp_play_count
-	}
+	new data1[SOUND_DATA_BASE]
+	new data2[SOUND_DATA_BASE]
+	ArrayGetArray(array, item1, data1)
+	ArrayGetArray(array, item2, data2)
+	if ( (data1[FLAGS] & FLAGS_JOIN_SND) == FLAGS_JOIN_SND )
+		return -1;
+	if ( (data2[FLAGS] & FLAGS_JOIN_SND) == FLAGS_JOIN_SND )
+		return 1;
+	if ( (data1[FLAGS] & FLAGS_EXIT_SND) == FLAGS_JOIN_SND )
+		return -1;
+	if ( (data2[FLAGS] & FLAGS_EXIT_SND) == FLAGS_JOIN_SND )
+		return 1;
+	return strcmp(data1[KEYWORD], data2[KEYWORD])
 }
 #endif
 
@@ -2208,12 +2140,19 @@ array_add_element( num , keyword[] )
 		}
 	}
 	
-	if ( join_check > 0
-		|| exit_check > 0 )
-		sound_data[num][FLAGS] |= FLAG_IGNORE_AMOUNT
-	sound_data[num][ADMIN_LEVEL_BASE] = cfg_parse_access(keyword)
-	copy(sound_data[num][KEYWORD], TOK_LENGTH, keyword)
-	sound_data[num][PLAY_COUNT_KEY] = 0
+	new sData[SOUND_DATA_BASE]
+	if ( join_check > 0 )
+		sData[FLAGS] |= FLAGS_JOIN_SND | FLAG_IGNORE_AMOUNT
+	if ( exit_check > 0 )
+		sData[FLAGS] |= FLAGS_EXIT_SND | FLAG_IGNORE_AMOUNT
+	sData[ADMIN_LEVEL_BASE] = cfg_parse_access(keyword)
+	copy(sData[KEYWORD], TOK_LENGTH, keyword)
+	sData[PLAY_COUNT_KEY] = 0
+	sData[SUB_INDEX] = _:ArrayCreate(SOUND_DATA_SUB)
+	if ( num < ArraySize(soundData) )
+		ArrayInsertArrayBefore(soundData, num, sData)
+	else
+		ArrayPushArray(soundData, sData)
 	
 	return (join_check == -1 && exit_check == -1)
 		? -1
@@ -2223,9 +2162,10 @@ array_add_element( num , keyword[] )
 
 array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , allow_global_precache = 0 , precache_sounds = 0 , allowed_to_precache = 0 )
 {
-	sound_data[num][ADMIN_LEVEL][elem] = cfg_parse_access(soundfile)
-	sound_data[num][SOUND_TYPE][elem] = soundfile[0] == '^"' ? SOUND_TYPE_SPEECH : ( soundfile[strlen(soundfile) - 1] == '3' ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
-	sound_data[num][PLAY_COUNT][elem] = 0
+	new subData[SOUND_DATA_SUB]
+	subData[ADMIN_LEVEL] = cfg_parse_access(soundfile)
+	subData[SOUND_TYPE] = soundfile[0] == '^"' ? SOUND_TYPE_SPEECH : ( soundfile[strlen(soundfile) - 1] == '3' ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
+	subData[PLAY_COUNT] = 0
 	
 	// check if not speech sounds
 	if ( soundfile[0] != '^"' )
@@ -2256,9 +2196,9 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 				return -1
 			}
 			
-			sound_data[num][DURATION][elem] = _:cfg_get_duration(sound_file_name, is_mp3 ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
+			subData[DURATION] = _:cfg_get_duration(sound_file_name, is_mp3 ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
 			
-			if ( sound_data[num][DURATION][elem] <= 0.0 )
+			if ( subData[DURATION] <= 0.0 )
 			{
 				log_amx("Sank Sounds >> Sound duration is not valid. File is damaged. Skipping this file: ^"%s^"", sound_file_name)
 				
@@ -2278,128 +2218,78 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 		}
 	}
 	
-	copy(sound_data[num][KEY_SOUNDS][TOK_LENGTH * elem], TOK_LENGTH, soundfile)
-	++sound_data[num][SOUND_AMOUNT]
+	copy(subData[SOUND_FILE], TOK_LENGTH, soundfile)
+	
+	new sData[SOUND_DATA_BASE]
+	ArrayGetArray(soundData, num, sData)
+	++sData[SOUND_AMOUNT]
+	if ( elem < ArraySize(sData[SUB_INDEX]) )
+		ArrayInsertArrayBefore(sData[SUB_INDEX], elem, subData)
+	else
+		ArrayPushArray(sData[SUB_INDEX], subData)
+	ArraySetArray(soundData, num, sData)
 	
 	return 1
 }
 
-array_clear_element( index )
+array_clear( )
 {
-	for ( new i = 0; i < TOK_LENGTH; ++i )
-		sound_data[index][KEYWORD][i] = 0
-	sound_data[index][SOUND_AMOUNT] = 0
-	sound_data[index][ADMIN_LEVEL_BASE] = 0
-	sound_data[index][FLAGS] = 0
-	sound_data[index][PLAY_COUNT_KEY] = 0
-	
-	for ( new i = 0; i < MAX_RANDOM; ++i )
-		array_clear_inner_element(index, i)
-}
-
-array_clear_inner_element( index , elem )
-{
-	for ( new i = 0; i < TOK_LENGTH; ++i )
-		sound_data[index][KEY_SOUNDS][TOK_LENGTH * elem + i] = 0
-	sound_data[index][DURATION][elem] = _:0.0
-	sound_data[index][ADMIN_LEVEL][elem] = 0
-	sound_data[index][SOUND_TYPE][elem] = 0
-	sound_data[index][PLAY_COUNT][elem] = 0
-}
-
-array_copy_element( dest , source )
-{
-	copy(sound_data[dest][KEYWORD], TOK_LENGTH, sound_data[source][KEYWORD])
-	sound_data[dest][SOUND_AMOUNT] = sound_data[source][SOUND_AMOUNT]
-	sound_data[dest][ADMIN_LEVEL_BASE] = sound_data[source][ADMIN_LEVEL_BASE]
-	sound_data[dest][FLAGS] = sound_data[source][FLAGS]
-	sound_data[dest][PLAY_COUNT_KEY] = sound_data[source][PLAY_COUNT_KEY]
-	
-	for ( new i = 0; i < MAX_RANDOM; ++i )
-		array_copy_inner_elements(dest, i, source, i)
-}
-
-array_copy_inner_elements( array1 , elem1 , array2 , elem2 )
-{
-	copy(sound_data[array1][KEY_SOUNDS][TOK_LENGTH * elem1], TOK_LENGTH, sound_data[array2][KEY_SOUNDS][TOK_LENGTH * elem2])
-	sound_data[array1][DURATION][elem1] = _:sound_data[array2][DURATION][elem2]
-	sound_data[array1][ADMIN_LEVEL][elem1] = sound_data[array2][ADMIN_LEVEL][elem2]
-	sound_data[array1][SOUND_TYPE][elem1] = sound_data[array2][SOUND_TYPE][elem2]
-	sound_data[array1][PLAY_COUNT][elem1] = sound_data[array2][PLAY_COUNT][elem2]
+	new sData[SOUND_DATA_BASE]
+	new aLen = ArraySize(soundData)
+	for ( new i = 0; i < aLen; ++i )
+	{
+		ArrayGetArray(soundData, i, sData)
+		ArrayDestroy(sData[SUB_INDEX])
+	}
+	ArrayDestroy(soundData)
 }
 
 array_remove( index )
 {
-	// Keep looping array, copying the next into the current
-	for ( ; index < MAX_KEYWORDS; ++index )
-	{
-		// We are at last List element or there is no succesor
-		// so clear it cause we want to remove one element anyway
-		if ( index == MAX_KEYWORDS - 1
-			|| sound_data[index + 1][KEYWORD][0] == 0 )
-		{
-			// Delete data
-			array_clear_element(index)
-			
-			// We reached the end
-			return
-		}
-		
-		// Copy the next data over the current
-		array_copy_element(index, index + 1)
-	}
+	new sData[SOUND_DATA_BASE]
+	ArrayGetArray(soundData, index, sData)
+	ArrayDestroy(sData[SUB_INDEX])
+	if ( index > 1 ) // join/exit keywords may not be removed
+		ArrayDeleteItem(soundData, index)
+	else
+		sData[SUB_INDEX] = _:ArrayCreate(SOUND_DATA_SUB)
 }
 
 array_remove_inner( index , elem )
 {
-	// we are removing an element, so decrease counter
-	--sound_data[index][SOUND_AMOUNT]
-	
-	for( ; elem < MAX_RANDOM; ++elem )
-	{
-		// If we're about to copy data that doesn't exist,
-		// then just erase the last entry instead of copying
-		if ( elem == MAX_RANDOM - 1
-			|| sound_data[index][KEY_SOUNDS][TOK_LENGTH * (elem + 1)] == 0 )
-		{
-			// Delete Sound
-			array_clear_inner_element(index, elem)
-			
-			// We reached the end
-			return
-		}
-		
-		// else
-		// Copy the next data over the current
-		array_copy_inner_elements(index, elem, index, elem + 1)
-	}
+	new sData[SOUND_DATA_BASE]
+	ArrayGetArray(soundData, index, sData)
+	--sData[SOUND_AMOUNT]
+	ArrayDeleteItem(sData[SUB_INDEX], elem)
+	ArraySetArray(soundData, index, sData)
 }
 
-cfg_write_keyword( index , Text[] , Textlen )
+cfg_write_keyword( file , data[] )
 {
-	Text[0] = 0
-	
-	if ( sound_data[index][ADMIN_LEVEL_BASE] )
+	if ( data[ADMIN_LEVEL_BASE] )
 	{
 		new access_str[32]
-		get_flags(sound_data[index][ADMIN_LEVEL_BASE], access_str, 31)
-		formatex(Text, Textlen, "@%s@%s;^t^t", access_str, sound_data[index][KEYWORD])
-	}else
-		formatex(Text, Textlen, "%s;^t^t", sound_data[index][KEYWORD])
+		get_flags(data[ADMIN_LEVEL_BASE], access_str, 31)
+		fputc(file, '@')
+		fputs(file, access_str)
+		fputc(file, '@')
+	}
+	fputs(file, data[KEYWORD])
+	fputs(file, ";^t^t")
 }
 
-cfg_write_keysound( index , Text[] , Textlen )
+cfg_write_keysound( file , subdata[] )
 {
-	new access_str[32]
-	for ( new j = 0; j < MAX_RANDOM && strlen(sound_data[index][KEY_SOUNDS][TOK_LENGTH * j]); ++j )
+	if ( subdata[ADMIN_LEVEL] )
 	{
-		if ( sound_data[index][ADMIN_LEVEL][j] )
-		{
-			get_flags(sound_data[index][ADMIN_LEVEL][j], access_str, 31)
-			format(Text, Textlen, "%s@%s@%s;", Text, access_str, sound_data[index][KEY_SOUNDS][TOK_LENGTH * j])
-		}else
-			format(Text, Textlen, "%s%s;", Text, sound_data[index][KEY_SOUNDS][TOK_LENGTH * j])
+		new access_str[32]
+		get_flags(subdata[ADMIN_LEVEL], access_str, 31)
+		fputc(file, '@')
+		fputs(file, access_str)
+		fputc(file, '@')
 	}
+	fputs(file, subdata[SOUND_FILE])
+	fputs(file, ";")
 }
 
 cfg_parse_access( str[] )
