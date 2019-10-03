@@ -123,12 +123,19 @@
 *	- fixed:
 *		- when setting DISPLAY_KEYWORDS to 0 chat was disabled
 *
-* v.1.4.2:
+* v1.4.2:
+*	- fixed:
+*		- players could be banned from sounds after reconnect
 *	- added:
-*		- option to include sounds from "half-life.gcf" and <mod>.gcf
+*		- option to include sounds from "half-life.gcf" and <current mod>.gcf
+*
+* v1.4.2b:
+*	- fixed:
+*		- compile error when disabling mp3 support
 *
 * IMPORTANT:
-*	a) if u want to use the internal download system do not use more than 500 sounds (HL cannot handle it)
+*	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
+*		(also depending on map, you may need to use even less)
 *		but if u disable the internal download system u can use as many sounds as the plugin can handle
 *		(max should be over 100000 sounds (depending on the Array Defines ), BUT the plugin speed
 *		is another question with thousands of sounds ;) )
@@ -179,14 +186,14 @@
 *			- these files are inside the steam package
 *			- for a list look at c)
 *		mapname:
-*			- type mapname <space> the real mapname
+*			- type mapname <space> the real mapname (without .bsp)
 *			- everthing below will be loaded only on this map
 *		package:
 *			- type package <space> number
 *			- everthing below will be loaded only once and switched to next package on map-change
 *			- if only 1 package this package will be used every map-change
 *		modspecific:
-*			- everything sound below that line must be inside half-life.gcf or <yourmod>.gcf
+*			- every sound below that line must be inside half-life.gcf or <yourmod>.gcf
 *			- if you add other files then said above they may/will crash your server as these sounds are assumed to be existent
 *	
 *	c) speech sounds must be put in quotes (eg: target; "target destroyed")
@@ -233,7 +240,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 new plugin_author[] = "White Panther, Luke Sankey, HunteR"
-new plugin_version[] = "1.4.2"
+new plugin_version[] = "1.4.2b"
 
 new FILENAME[128]
 
@@ -252,12 +259,13 @@ new ADMINS_ONLY = 0				// Determinates if only admins are allowed to play sounds
 new DISPLAY_KEYWORDS = 1			// Determinates if keywords are shown in chat or not
 
 new WordWavCombo[MAX_KEYWORDS][TOK_LENGTH*(MAX_RANDOM+1)]
+new soundnum_for_keyword[MAX_KEYWORDS]
 
 new Float:LastSoundTime = 0.0	// Very limited spam protection
 new bSoundsEnabled = 1		// amx_sound <on/off> or <1/0>
 
 new g_max_players
-new restrict_playing_sounds[33], player_steamid[33][60]
+new restrict_playing_sounds[33], banned_player_steamid[33][60]
 
 public plugin_init( )
 {
@@ -281,13 +289,6 @@ public plugin_init( )
 	g_max_players = get_maxplayers()
 }
 
-#if defined MP3_SUPPORT
-public plugin_modules( )
-{
-	require_module("engine")
-}
-#endif
-
 public client_connect( id )
 {
 	if ( get_gametime() > get_cvar_num("mp_sank_sounds_freezetime") )
@@ -302,16 +303,24 @@ public client_connect( id )
 	}
 	SndCount[id] = 0
 	SndOn[id] = 1
+}
+
+public client_putinserver( id )
+{
+	restrict_playing_sounds[id] = 0
+	
 	new steamid[60]
 	get_user_authid(id, steamid, 59)
-	if ( equal(steamid, player_steamid[id]) )
-		restrict_playing_sounds[id] = 1
-	else
+	for ( new i = 1; i <= g_max_players; i++ )
 	{
+		if ( equal(steamid, banned_player_steamid[id]) )
+			restrict_playing_sounds[id] = 1
+	}
+	if ( !restrict_playing_sounds[id] )
+	{
+		restrict_playing_sounds[id] = 0
 		for ( new i = 0; i < 60; i++ )
-			player_steamid[id][i] = 0
-		
-		copy(player_steamid[id], 59, steamid)
+			banned_player_steamid[id][i] = 0
 	}
 }
 
@@ -428,7 +437,11 @@ public amx_sound_add( id , level , cid )
 		
 		// check if is a speech
 		new found_speech
+#if defined MP3_SUPPORT
 		if ( containi(Wav, ".wav") == -1 && containi(Wav, ".mp3") == -1 )
+#else
+		if ( containi(Wav, ".wav") == -1 )
+#endif
 		{
 			found_speech = 1
 			format(Wav, TOK_LENGTH, "^"%s^"", Wav)
@@ -708,7 +721,11 @@ public amx_sound_remove( id , level , cid )
 							break
 						
 						// speech must have extra ""
+#if defined MP3_SUPPORT
 						if ( containi(Wav, ".wav") == -1 && containi(Wav, ".mp3") == -1 )
+#else
+						if ( containi(Wav, ".wav") == -1 )
+#endif
 							format(Wav, TOK_LENGTH, "^"%s^"", Wav)
 						
 						// Look for a Wav match
@@ -915,7 +932,7 @@ public amx_sound_print_matrix( id , level , cid )
 		new i, j, join_snd_buff[TOK_LENGTH*MAX_RANDOM], exit_snd_buff[TOK_LENGTH*MAX_RANDOM]
 		
 		if ( id )
-			client_print(id, print_console, "SND_WARN: %d^nSND_MAX: %d^n", SND_WARN, SND_MAX)
+			client_print(id, print_console, "SND_WARN: %d^nSND_MAX: %d", SND_WARN, SND_MAX)
 		else
 			server_print("SND_WARN: %d^nSND_MAX: %d^n", SND_WARN, SND_MAX)
 		
@@ -935,10 +952,10 @@ public amx_sound_print_matrix( id , level , cid )
 		}
 		if ( id )
 		{
-			client_print(id, print_console, "SND_JOIN: %s^n", join_snd_buff)
-			client_print(id, print_console, "SND_EXIT: %s^n", exit_snd_buff)
-			client_print(id, print_console, "SND_DELAY: %f^nSND_SPLIT: %d^nEXACT_MATCH: %d^n", SND_DELAY, SND_SPLIT, EXACT_MATCH)
-			client_print(id, print_console, "ADMINS_ONLY: %d^nDISPLAY_KEYWORDS: %d^n", ADMINS_ONLY, DISPLAY_KEYWORDS)
+			client_print(id, print_console, "SND_JOIN: %s", join_snd_buff)
+			client_print(id, print_console, "SND_EXIT: %s", exit_snd_buff)
+			client_print(id, print_console, "SND_DELAY: %f^nSND_SPLIT: %d^nEXACT_MATCH: %d", SND_DELAY, SND_SPLIT, EXACT_MATCH)
+			client_print(id, print_console, "ADMINS_ONLY: %d^nDISPLAY_KEYWORDS: %d", ADMINS_ONLY, DISPLAY_KEYWORDS)
 		}else
 		{
 			server_print("SND_JOIN: %s^n", join_snd_buff)
@@ -953,7 +970,7 @@ public amx_sound_print_matrix( id , level , cid )
 			if ( strlen(WordWavCombo[i]) != 0 )
 			{
 				if ( id )
-					client_print(id, print_console, "^n[%d] ^"%s^"", i, WordWavCombo[i][0])
+					client_print(id, print_console, "^n[%d] ^"%s^" with %d sound%s", i, WordWavCombo[i][0], soundnum_for_keyword[i], soundnum_for_keyword[i] > 1 ? "s" : "")
 				else
 					server_print("^n[%d] ^"%s^"", i, WordWavCombo[i][0])
 				for( j = 1; j < MAX_RANDOM + 1; j++ )
@@ -994,9 +1011,15 @@ public amx_sound_ban( id , level , cid )
 		new onoff[5]
 		read_argv(2, onoff, 4)
 		if ( equal(onoff, "on") || equal(onoff, "1") )
+		{
 			restrict_playing_sounds[player] = 1
-		else if ( equal(onoff, "off") || equal(onoff, "0") )
+			get_user_authid(id, banned_player_steamid[player], 59)
+		}else if ( equal(onoff, "off") || equal(onoff, "0") )
+		{
 			restrict_playing_sounds[player] = 0
+			for ( new i = 0; i < 60; i++ )
+				banned_player_steamid[player][i] = 0
+		}
 	}
 	return PLUGIN_HANDLED
 }
@@ -1067,13 +1090,13 @@ public HandleSay( id )
 #if DEBUG
 			new name[33]
 			get_user_name(id, name, 32)
-			client_print(id, print_console, "Checking Quota for %i:  %s in %s^n", name, Text, Speech)
+			client_print(id, print_console, "Checking Quota for %i:  %s in %s", name, Text, Speech)
 #endif
 			
 			// If the user has not exceeded their quota, then play a Wav
 			if ( !QuotaExceeded(id) )
 			{
-				new rand = random(MAX_RANDOM)
+				new rand = random(soundnum_for_keyword[ListIndex])
 				new timeout
 				new playFile[TOK_LENGTH]
 	
@@ -1081,7 +1104,7 @@ public HandleSay( id )
 				// Defaults to the first Wav file, if no file is found at random.
 				for( timeout = MAX_RANDOM;			// Initial condition
 					timeout >= 0 && !strlen(playFile);	// While these are true
-					timeout--, rand = random(MAX_RANDOM) )	// Update each iteration
+					timeout--, rand = random(soundnum_for_keyword[ListIndex]) )	// Update each iteration
 				{
 					// If for some reason we never find a file
 					//  then default to the first Wav entry
@@ -1218,7 +1241,7 @@ parse_sound_file( loadfile[] )
 			if ( ListIndex >= MAX_KEYWORDS )
 			{
 				log_amx("Sank Sound Plugin >> Sound list truncated. Increase MAX_KEYWORDS")
-				log_amx("Sank Sound Plugin >> Stopped parsing %s file^n", loadfile)
+				log_amx("Sank Sound Plugin >> Stopped parsing file ^"%s^"^n", loadfile)
 				break
 			}
 			// As long as the line isn't commented out, and isn't blank, then process it.
@@ -1227,7 +1250,7 @@ parse_sound_file( loadfile[] )
 				new fatal_error
 				// Take up to MAX_RANDOM Wav files for each keyWord, each separated by a ';'
 				// Right now we fill the big WadOstrings[] with the information from the file.
-				new is_wordwav_combo = 1
+				new is_wordwav_combo = 1, is_keyword_sound = 1
 				for( i = 0; i <= MAX_RANDOM; i++ )
 				{
 					new temp_str[128]
@@ -1258,6 +1281,8 @@ parse_sound_file( loadfile[] )
 					{	// first is not a sound file
 						if ( equali(temp_str, "SND_MAX") || equali(temp_str, "SND_WARN") || equali(temp_str, "SND_DELAY") || equali(temp_str, "SND_SPLIT") || equali(temp_str, "EXACT_MATCH") || equali(temp_str, "ADMINS_ONLY") || equali(temp_str, "DISPLAY_KEYWORDS") )
 							is_wordwav_combo = 0
+						else if ( equali(temp_str, "SND_JOIN") || equali(temp_str, "SND_EXIT") )
+							is_keyword_sound = 0
 					}else if ( is_wordwav_combo && strlen(temp_str) )
 					{
 						// check if not speech sounds
@@ -1266,12 +1291,16 @@ parse_sound_file( loadfile[] )
 							new file_name[128], file_name_temp[128]
 							copy(file_name, 127, temp_str)
 							replace(file_name, TOK_LENGTH, "@", "")
+#if defined MP3_SUPPORT
 							new mp3 = ( containi(file_name, ".mp3") != -1 )
 							if ( !mp3 )
 							{	// ".mp3" in not in the string
+#endif
 								copy(file_name_temp, 127, file_name)
 								format(file_name, 127, "sound/%s", file_name)
+#if defined MP3_SUPPORT
 							}
+#endif
 							if ( !file_exists(file_name) && allow_check_existence )
 							{
 								log_amx("Sank Sound Plugin >> Trying to load a file that dont exist. Skipping this file: ^"%s^"", file_name)
@@ -1283,15 +1312,17 @@ parse_sound_file( loadfile[] )
 							{
 								if ( allowed_to_precache )
 								{
-									if ( mp3 )
 #if defined MP3_SUPPORT
+									if ( mp3 )
 										precache_generic(file_name)
-#endif
 									else
+#endif
 										precache_sound(file_name_temp)
 								}
 							}
 						}
+						if ( is_keyword_sound )
+							soundnum_for_keyword[ListIndex]++
 					}
 					
 					// sound exists and has correct length, so copy it into our big array
@@ -1308,7 +1339,7 @@ parse_sound_file( loadfile[] )
 				if( strlen(strLineBuf) != 0 && !fatal_error )
 				{
 					log_amx("Sank Sound Plugin >> Sound list partially truncated. Increase MAX_RANDOM")
-					log_amx("Sank Sound Plugin >> Continuing to parse ^"%s^" file^n", loadfile)
+					log_amx("Sank Sound Plugin >> Continuing to parse file ^"%s^"^n", loadfile)
 				}
 				
 				// No error occured so continue
@@ -1554,9 +1585,9 @@ trim_spaces( str_to_trim[] )
 print_sound_list( id , motd_msg = 0 )
 {
 	new text[256], motd_buffer[2048], ilen
-	new info_text[64] = "say <keyword>: Plays a sound. Keywords are listed below:^n"
+	new info_text[64] = "say <keyword>: Plays a sound. Keywords are listed below:"
 	if ( motd_msg )
-		ilen = format(motd_buffer, 2047, "<body bgcolor=#000000><font color=#FFB000><pre>%s", info_text)
+		ilen = format(motd_buffer, 2047, "<body bgcolor=#000000><font color=#FFB000><pre>%s^n", info_text)
 	else
 		client_print(id, print_console, info_text)
 	// Loop once for each keyword
@@ -1570,7 +1601,7 @@ print_sound_list( id , motd_msg = 0 )
 		// check if player can see admin sounds
 		j += 1
 		new found_stricted = 0
-		if ( contain(WordWavCombo[i], "@") != -1 )
+		if ( equal(WordWavCombo[i], "@", 1) )
 		{
 			if ( get_user_flags(id) & ACCESS_ADMIN )
 			{
@@ -1595,12 +1626,12 @@ print_sound_list( id , motd_msg = 0 )
 			if( j % NUM_PER_LINE == NUM_PER_LINE - 1 )
 			{
 				// We got NUM_PER_LINE on this line,
-				//  so print it and start on the next line
+				// so print it and start on the next line
 				if ( motd_msg )
 					ilen += format(motd_buffer[ilen], 2047-ilen, "^n")
 				else
 				{
-					client_print(id, print_console, "%s^n", text)
+					client_print(id, print_console, "%s", text)
 					text[0] = 0
 				}
 			}else
@@ -1672,13 +1703,18 @@ stock SiftDown( root , bottom )
 
 stock switch_array_elements( element_one , element_two )
 {
-	new temp_str[TOK_LENGTH*(MAX_RANDOM+1)], i
+	new temp_str[TOK_LENGTH*(MAX_RANDOM+1)], temp_int, i
 	for ( i = 0; i < TOK_LENGTH*(MAX_RANDOM+1); i++ )
 		temp_str[i] = WordWavCombo[element_one][i]
+	temp_int = soundnum_for_keyword[element_one]
+	
 	for ( i = 0; i < TOK_LENGTH*(MAX_RANDOM+1); i++ )
 		WordWavCombo[element_one][i] = WordWavCombo[element_two][i]
+	soundnum_for_keyword[element_one] = soundnum_for_keyword[element_two]
+	
 	for ( i = 0; i < TOK_LENGTH*(MAX_RANDOM+1); i++ )
 		WordWavCombo[element_two][i] = temp_str[i]
+	soundnum_for_keyword[element_two] = temp_int
 }
 
 /*
