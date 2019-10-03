@@ -78,13 +78,14 @@
 
 SND_MODE:
 Wähle die Optionen aus und addiere sie zusammen
-1 = Tote können Sounds abspielen
-2 = Lebende können Sounds abspielen
-4 = Tote können Sounds hören
-8 = Lebende können Sounds hören
-16 = Lebende und Tote sind isoliert
-32 = Tote hören Sounds von Lebenden ( auch wenn isoliert )
-64 = Lebende hören Sounds von Toten ( auch wenn isoliert )
+1   = Tote können Sounds abspielen
+2   = Lebende können Sounds abspielen
+4   = Tote können Sounds hören
+8   = Lebende können Sounds hören
+16  = Lebende und Tote sind isoliert
+32  = Tote hören Sounds von Lebenden ( auch wenn isoliert )
+64  = Lebende hören Sounds von Toten ( auch wenn isoliert )
+128 = Bots können Sounds benutzen
 
 zB: 1 + 4 = 5, bedeutet das nur Tote Sounds abspielen und hören können
 

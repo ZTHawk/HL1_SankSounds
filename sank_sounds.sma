@@ -2103,7 +2103,8 @@ playsoundall( sound[] , type , split_dead_alive = 0 , sender_alive_status = 0 )
 		if ( !is_user_connected(i) )
 			continue
 		
-		if ( is_user_bot(i) )
+		if ( is_user_bot(i)
+			&& !(SND_MODE & 128) )
 			continue
 		
 		if ( !SndOn[i] )

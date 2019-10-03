@@ -78,13 +78,14 @@
 
 SND_MODE:
 Choose options below add add then together
-1 = dead can play sounds
-2 = alive can play sounds
-4 = dead can hear sounds
-8 = alive can hear sounds
-16 = alive and dead are isolated
-32 = dead can hear sounds from alive ( even if isolated )
-64 = alive can hear sounds from dead ( even if isolated )
+1   = dead can play sounds
+2   = alive can play sounds
+4   = dead can hear sounds
+8   = alive can hear sounds
+16  = alive and dead are isolated
+32  = dead can hear sounds from alive ( even if isolated )
+64  = alive can hear sounds from dead ( even if isolated )
+128 = bots can use sounds
 
 eg: 1 + 4 = 5, means only dead can play and hear sounds
 
