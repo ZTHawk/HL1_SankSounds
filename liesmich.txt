@@ -1,0 +1,286 @@
+1.1) Installation
+1.2) Wie muss die config Datei strukturiert sein ?
+
+2.1) Spezielle-Optionen in der config Datei
+2.2) WAV, MP3 und SPEECH korrekt in der config Datei
+2.3) Ein neues Wort / Sound hinzufügen
+2.4) Benutzerdefinierte Rechte pro Wort/Sound
+
+3) CVAR's und ihre Beschreibung
+
+4.1) WAV ist nicht gleich WAV, hier ist das korrekte Format
+4.2) Mehr Sounds hinzugefügt als funktionieren/angezeigt werden ?
+4.3) Plugin funktioniert nicht oder Probleme mit Sounds ?
+4.4) Server crashed ?
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ 1.1)
+
+- Tue die Configurationsdatei "snd-list.cfg" in den "addons/amxmodx/configs" Ordner
+- Tue die "sank_sounds.amxx" Datei in den AmxModX Plugins Ordner
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ 1.2)
+
+- Dateinamen dürfen keine leerzeichen enthalten
+
+- Datei muss wie folgt aussehen:
+	SND_MAX;		20			// maximale Anzahl von Sounds die ein Spieler pro map benutzten kann
+	SND_MAX_DUR		180.0			// maximale Länge von Sounds in Sekunden die ein Spieler pro map abspielen kann
+	SND_WARN;		17			// wieviele Sounds ein Spieler pro map benutzten kann bis er eine Warnung bekommt
+	SND_JOIN;		sound/misc/hi.wav		// Sounds die abgespielt werden wenn jemand das Spiel betritt
+	SND_EXIT;		sound/misc/comeagain.wav	// Sounds die abgespielt werden wenn jemand das Spiel verlässt
+	SND_DELAY;		0.0			// Zeit die zwischen 2 Sounds abgewartet werden muss
+	SND_MODE;		15			// Definiert wer Sounds abspielen und hören kann (Lebende und Tote)
+	SND_IMMUNITY;		"l"         // Definiert den Zugriffslevel welcher Immunität für warn/kick/ban haben soll (Standard ADMIN_LEVEL_A für Rückwärtskompatibilität)
+	                                // "ab" = Jeder mit Zugriff "a" oder "b" hat Immunität
+	                                // "" = Niemand wird Immunität haben (Anführungsstriche sich wichtig!)
+	EXACT_MATCH;		1			// Definiert ob das Wort im Chat genau dem in der config Datei entsprechen muss oder nicht
+	ADMINS_ONLY;		0			// Definiert ob nur Admins Sounds abspielen können
+	DISPLAY_KEYWORDS;	1			// Setzte dies auf 0 wenn du nicht willst das Wörter von Sounds im Chat angezeigt werden sollen
+
+	# Word/Wav combinations:
+	crap;			sound/misc/awwcrap.Wav;sound/misc/awwcrap2.wav
+	woohoo;			sound/misc/woohoo.wav
+	@ha ha;			sound/misc/haha.wav
+	doh;			sound/misc/doh.wav;sound/misc/doh2.wav;@sound/misc/doh3.wav
+	mp3;			sound/mymp3.mp3;music/mymp3s/number2.mp3;mainfolder.mp3
+	target;			"target destroyed"
+	
+	mapname TESTMAP
+	testmap;		music/doh.wav
+	mapname TESTMAP2
+	testmap2;		maps/haha.wav;sound/mymp3.mp3
+	testmap3;		sound/misc/hi.wav
+	mapnameonly TESTMAP3
+	testmap3;		sound/misc/hi.wav
+	
+	package 1
+	haha2;			sound/misc/haha.wav
+	doh3;			sound/misc/doh3.wav
+	package 2
+	hi;				sound/misc/hi.wav
+	
+	modspecific
+	<keyword>;		<location>/<name>.wav
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ 2.1)
+
+SND_MODE:
+Wähle die Optionen aus und addiere sie zusammen
+1 = Tote können Sounds abspielen
+2 = Lebende können Sounds abspielen
+4 = Tote können Sounds hören
+8 = Lebende können Sounds hören
+16 = Lebende und Tote sind isoliert
+32 = Tote hören Sounds von Lebenden ( auch wenn isoliert )
+64 = Lebende hören Sounds von Toten ( auch wenn isoliert )
+
+zB: 1 + 4 = 5, bedeutet das nur Tote Sounds abspielen und hören können
+
+Die drei Optionen 16 + 32 + 64 zusammen, ist das gleiche als ob man keine dieser Optionen setzt
+
+Zusätzliche Configs:
+
+mapname:
+	- tippe mapname <leerzeichen> der echte Map Name (ohne .bsp) (eg: mapnameonly de_dust)
+	- alles unter dieser Zeile wird nur bei dieser Map geprecached aber auf jeder benutzt
+
+mapnameonly:
+	- tippe mapnameonly <leerzeichen> der echte Map Name (ohne .bsp) (eg: mapnameonly de_dust)
+	- alles unter dieser Zeile wird nur bei dieser Map benutzt
+
+package:
+	- tippe package <leerzeichen> Nummer (eg: package 2)
+	- alles unter dieser Zeile wird nur einmal geladen und beim Map wechsel zum nächsten "package" gesprungen
+	- wenn nur ein package existiert wird dieser bei jedem Map wechsel benutzt
+
+modspecific:
+	- alles unter dieser Zeile muss inhalf-life.gcf oder <deinmod>.gcf (zB: counter-strike.gcf) sein
+	- wenn du andere Dateien hinzufügst (zB: wenn du CS hast und sounds aus TFC hinzufügst) kann/wird dies den Server crashen, da diese Sounds als existent eingestufft werden
+
+INFO:
+mapname		= precachen von sounds auf bestimmten maps, ABER man kann auf allen maps benutzten
+mapnameonly	= precachen von sounds auf bestimmten maps, ABER nur auf dieser map kann man sie benutzen
+
+INFO2:
+Neu OPTIONEN anfangen für dazu das die folgenden Sounds NUR an diese OPTION gebunden sind.
+
+zB:
+mapname de_dust
+haha;		misc/haha.wav
+mapname cs_italy
+hi;		misc/hi.wav
+
+"misc/hi.wav" ist an die OPTION "mapname cs_italy" gebunden.
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ 2.2)
+
+Unterschiedliche Sound Typen brauchen unterschiedliche Einstellungen:
+
+WAV Dateien: und
+MP3 Dateien:
+	- basis Verzeichnis ist "mod-verzeichnis/"
+	- füge den EXAKTEN PFAD zur mp3
+	- wenn dein Sound in "cstrike/sound/misc/good.mp3" liegt, dann muss du zur config folgendes hinzufügen "sound/misc/good.mp3"
+SPEECH Dateien:
+	- basis Verzeichnis ist "mod-verzeichnis/sound/vox/"
+	- diesee Dateien sind in dem steam Packet
+	- speech Sounds müssen in Anführungsstriche getan werden (zB: target; "target destroyed")
+	du darfst nicht verschiedene Speech Typen in eine speech tun oder die speech wird icht abgespielt
+	speech ohne Verzeichnis wird aus  "vox/.." benutzt
+	zuerst definiere den Speech Typ (NUR EINMAL zB hgrunt/) und dann füge die Wörter mir leerzeichen zwischen jedem speech ein
+	zB "hgrunt/yessir barney/stop1" wird nicht funktionieren denn es sind 2 verschiedene Speeches
+	ABER "hgrunt/yessir no" wird funktionieren
+	finde alle verfügbaren Speech Sounds hier:
+		"http://www.adminmod.org/help/online/Admin_Mod_Reference/Half_Life_Sounds.htm"
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ 2.3)
+
+- Wenn du ein neues Wort hinzufügen willst, tue dies unter "# Word/Wav combinations:" als eine NEUE Zeile.
+- Das einfüge eines " @ " vor einem Wort, führt dazu das nur Admins dieses benutzten können.
+- Nach einem Wort und zwischen Sounds muss ein " ; " sein.
+- Sounds die an ein Wort gebunden werden, müssen in der gleichen Zeile stehen !!!
+- Das einfüge eines " @ " vor einem Sound führt dazu das nur Admins dieses benutzten können. Also wenn
+  ein Wort öffentlich ist und es hat 2 Sounds, eines öffentlich und eines mit einem " @ ", führt dies
+  dazu, dass wenn Spieler dieses Wort benutzten nur ein Sound abgespielt werden kann, ABER wenn ein
+  ADMIN dieses Wort benutzt is es möglich das der zweite Sound abgespielt wird.
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ 2.4)
+
+Füge vor einem Wort/Sound @<ACCESS_LEVELS>@ ein
+Ersetze <ACCESS_LEVELS> mit den Rechten die du möchtest
+
+zB:
+@abc@hallo;   sound/misc/hallo.wav; @ab@sound/misc/hi.wav
+
+Das Wort "hallo" kann von jedem mit den Rechten "a", "b" oder "c"
+Nur Spieler mit den Rechten "a" oder "b" können "sound/misc/hi.wav" abspielen
+ABER alle können "sound/misc/hallo.wav" abspielen
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ 3)
+
+CVARS:
+
+"mp_sank_sounds_download" 0 oder 1 :
+
+Dies aktiviert oder deaktiviert das "Interne Dowload System"
+Mit anderen Worten, Snak Sounds kümmert sich darum das die Spieler alle Sounds runterladen.
+
+"mp_sank_sounds_freezetime" <Zeit in Sekunden> :
+
+Dies definiert wie lange es dauert bis der erste betretten/verlassen Sound abgespielt wird (verhindert massig Sounds beim Map wechsel)
+
+"mp_sank_sounds_obey_duration" <Modus> :
+
+Dies definiert wer Soundlängen beachten muss bevor wieder ein sound abgespielt werden kann.
+0 = niemand
+1 = public
+2 = admins
+4 = RCON
+
+zB: 1 + 2 = 3, bedeutet, dass normale Spieler und normale Admins die Soundlängen beachten müssen
+7, bedeutet, dass zusätzlich RCON admins die Soundlängen beachten müssen
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ 4.1)
+
+Die WAVs die du erstellst müssen dieses Format haben:
+- PCM
+- mono
+- maximal 22 KHz
+- 8 oder 16 bit
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ 4.2)
+
+Wenn du ein Problem mit Sounds hast, überprüfe deine Server Console und deine amxmodX Logs.
+Die Logs sind hier zu finden "<mod-Verzeichnis>/addons/amxmodx/logs/L<Monat><Tag>.log".
+Öffne sie (mit notepad).
+Eine Log die von Sank Sounds erstellt wurde sieht so aus:
+"L <Monat>/<Tag>/<Jahr> - <Zeit>: [sank_sounds.amxx] Sank Sound Plugin >> XXXXX"
+
+XXXXX ist die Nachricht die wichtig ist.
+Sie sagt mir was falsch ist.
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ 4.3)
+
+Wenn du viele Sounds hinzugefügt hast und nicht alle abgespielt werden, ist es möglich,
+dass du mehr hinzugefügt hast als Sank Sounds standardmässig unterstützt ( standard = 80 ).
+Du musst die .sma öffnen und nach folgenden Zeilen suchen und deren Werte verändern:
+
+#define MAX_KEYWORDS	80	// Maximale Anzahl an Wörtern
+#define MAX_RANDOM	15	// Maximale Anzahl an Sounds pro Wort
+#define TOK_LENGTH	60	// Maximale Wörterlänge bzw Soundwortlänge
+
+ABER Achtung:
+( MAX_RANDOM + 1 ) * TOK_LENGTH muss kleiner sein als 2048
+
+zB Standard:
+( 15 + 1 ) * 60 = 960
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ 4.4)
+
+a)
+
+Wenn du einen Fehler wie diesen bekommst:
+"Host_Error: PF_precache_sound_I : Sound ´fgrunt/medic.wav´ failed to precache because
+the item count is over the 512 limit."
+Musst du die Anzahl der Sound verringern
+Dies ist ein Half-Life Bug, es gibt KEINE Möglichkeit das zu fixen
+
+b)
+
+SERVER CRASH:
+Dies kann nur passieren wenn das "Interne Dowload System" an ist (oder diese Sounds von anderen plugin heruntergeladen werden)
+Du hast 2 Möglichkeiten:
+
+1) Deaktiviere das "Interne Dowload System" indem du die CVAR "mp_sank_sounds_download" auf 0 setzt
+In der Server Console "mp_sank_sounds_download 0"
+Oder um dies auf dauer zu deaktivieren, füge diese Zeile zur amxmodx.cfg:
+"mp_sank_sounds_download 0"
+
+2) Verkleinere deine Sound Liste
+
+WICHTIG:
+Das benutzten von anderen download plugins für diese Sounds wird NICHT helfen. Dies ist ein HL bug und es ist NICHT möglich ihn zu korrigieren.
