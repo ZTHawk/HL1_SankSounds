@@ -353,6 +353,13 @@
 *	- fixed:
 *		- players could get stuck in a "spectator" mode state or being kicked if trying to play a sound with exactly TOK_LENGTH length
 *
+* v1.8.7: (2017.11.26)
+*	- fixed:
+*		- console warnings when "developer" is set to "1"
+*		- misc
+*	- changed:
+*		- support to also load files from "<MOD>_<xxx>" folders
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -465,7 +472,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.8.6"
+#define PLUGIN_VERSION		"1.8.7"
 
 new Enable_Sound[] =  "sound/misc/woohoo.wav"   // Sound played when Sank Sounds being enabled
 new Disable_Sound[] = "sound/misc/awwcrap.wav"  // Sound played when Sank Sounds being disabled
@@ -499,6 +506,8 @@ new restrict_playing_sounds[33]
 new sound_quota_steamids[33][60]
 
 new motd_sound_list_address[256]
+
+new Array:modSearchPaths
 
 enum
 {
@@ -548,7 +557,7 @@ enum
 
 enum _:SOUND_DATA_BASE
 {
-	KEYWORD[TOK_LENGTH],
+	KEYWORD[TOK_LENGTH + 1],
 	ADMIN_LEVEL_BASE,
 	SOUND_AMOUNT,
 	FLAGS,
@@ -569,7 +578,12 @@ public plugin_init( )
 {
 	register_plugin("Sank Sounds Plugin", PLUGIN_VERSION, PLUGIN_AUTHOR)
 	register_cvar("sanksounds_version", PLUGIN_VERSION, FCVAR_SERVER)
-	set_cvar_string("sanksounds_version", PLUGIN_VERSION)
+	new tmpStr[32]
+	get_cvar_string("sanksounds_version", tmpStr, 31)
+	if ( !equal(tmpStr, PLUGIN_VERSION) )
+	{
+		set_cvar_string("sanksounds_version", PLUGIN_VERSION)
+	}
 	
 	register_concmd("amx_sound_reset", "amx_sound_reset", ACCESS_ADMIN, " <user | all> : Resets sound quota for ^"user^", or everyone if ^"all^"")
 	register_concmd("amx_sound_add", "amx_sound_add", ACCESS_ADMIN, " <keyword> <dir/sound> : Adds a Word/Sound combo to the sound list")
@@ -595,6 +609,20 @@ public plugin_init( )
 	g_max_players = get_maxplayers()
 	
 	soundData = ArrayCreate(SOUND_DATA_BASE)
+	modSearchPaths = ArrayCreate(64)
+	
+	new tmpLen = strlen(Enable_Sound)
+	if ( tmpLen > 4
+		&& equali(Enable_Sound[tmpLen - 4], ".wav") )
+	{
+		Enable_Sound[tmpLen - 4] = 0
+	}
+	tmpLen = strlen(Disable_Sound)
+	if ( tmpLen > 4
+		&& equali(Disable_Sound[tmpLen - 4], ".wav") )
+	{
+		Disable_Sound[tmpLen - 4] = 0
+	}
 }
 
 public plugin_cfg( )
@@ -668,7 +696,11 @@ public client_putinserver( id )
 		NextSoundTime = Join_exit_SoundTime
 }
 
+#if AMXX_VERSION_NUM < 183
 public client_disconnect( id )
+#else
+public client_disconnected( id )
+#endif
 {
 	SndOn[id] = 1
 	restrict_playing_sounds[id] = -1
@@ -934,14 +966,21 @@ public amx_sound_play( id , level , cid )
 	new arg[128]
 	read_argv(1, arg, 127)
 	
-	if ( strlen(arg) < 1 )
+	new arg_len = strlen(arg)
+	if ( arg_len < 1 )
 	{
 		client_print(id, print_console, "Sank Sounds >> Sound is invalid.")
 		
 		return PLUGIN_HANDLED
 	}
 	
-	new type = arg[0] == '^"' ? SOUND_TYPE_SPEECH : ( arg[strlen(arg) - 1] == '3' ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
+	new type = arg[0] == '^"' ? SOUND_TYPE_SPEECH : ( arg[arg_len - 1] == '3' ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
+	if ( type == SOUND_TYPE_WAV
+		&& arg_len > 4
+		&& equali(arg[arg_len - 4], ".wav") ) // WAV with extension
+	{
+		arg[arg_len - 4] = 0
+	}
 	playsoundall(arg, type)
 	
 	return PLUGIN_HANDLED
@@ -1524,12 +1563,12 @@ public HandleSay( id )
 		displayQuotaWarning(id)
 		new rand
 		new timeout
-		new playFile[TOK_LENGTH + 1] // SOUND_FILE has an internal length of TOK_LENGTH + 1
 		
 		// This for loop runs around until it finds a real file to play
 		// Defaults to the first Sound file, if no file is found at random.
+		new foundFile = false
 		for( timeout = MAX_RANDOM;			// Initial condition
-			timeout >= 0 && !strlen(playFile);	// While these are true
+			timeout >= 0;	// While these are true
 			--timeout )				// Update each iteration
 		{
 			rand = random(sData[SOUND_AMOUNT])
@@ -1542,10 +1581,11 @@ public HandleSay( id )
 			// check if sound has access defined, if so only allow admins to use it
 			if ( subData[ADMIN_LEVEL] == 0
 				|| ( get_user_flags(id) & subData[ADMIN_LEVEL] ) )
-				copy(playFile, TOK_LENGTH + 1, subData[SOUND_FILE])
+			{
+				foundFile = true
+			}
 		}
-		
-		if ( playFile[0] )
+		if ( foundFile )
 		{
 			NextSoundTime = gametime + subData[DURATION]
 			
@@ -1561,7 +1601,7 @@ public HandleSay( id )
 			if ( pinToLocation == 1
 				&& type == SOUND_TYPE_WAV )
 				type = SOUND_TYPE_WAV_LOCAL
-			playsoundall(playFile, type, SND_MODE & 16, is_user_alive(id))
+			playsoundall(subData[SOUND_FILE], type, SND_MODE & 16, is_user_alive(id))
 			
 			LastSoundTime = gametime
 			ArraySetArray(sData[SUB_INDEX], rand, subData)
@@ -2078,8 +2118,12 @@ playsoundall( sound[] , type , split_dead_alive = 0 , sender_alive_status = 0 )
 		else if ( type == SOUND_TYPE_WAV_LOCAL )
 			client_cmd(i, "play ^"%s^"", sound)
 		else if ( type == SOUND_TYPE_SPEECH )
-			client_cmd(i, "spk %s", sound)
-		else
+		{
+			if ( sound[0] == '^"' )
+				client_cmd(i, "spk %s", sound)
+			else
+				client_cmd(i, "spk ^"%s^"", sound)
+		}else
 			client_cmd(i, "spk ^"%s^"", sound)
 	}
 }
@@ -2184,6 +2228,9 @@ array_add_element( num , keyword[] )
 			join_check = -1
 			exit_check = -1
 			num = 2
+			new sData[SOUND_DATA_BASE]
+			ArrayPushArray(soundData, sData)
+			ArrayPushArray(soundData, sData)
 		}
 	}else
 	{
@@ -2210,10 +2257,17 @@ array_add_element( num , keyword[] )
 	copy(sData[KEYWORD], TOK_LENGTH, keyword)
 	sData[PLAY_COUNT_KEY] = 0
 	sData[SUB_INDEX] = _:ArrayCreate(SOUND_DATA_SUB)
-	if ( num < ArraySize(soundData) )
-		ArrayInsertArrayBefore(soundData, num, sData)
-	else
+	new diffSize = ArraySize(soundData) - num
+	if ( num < ArraySize(soundData) ){
+		ArraySetArray(soundData, num, sData)
+	} else if ( diffSize < 0 )
+	{
+		log_amx("Sank Sounds >> Bad index when adding keyword ^"%s^".", keyword)
+		return -2
+	} else
+	{
 		ArrayPushArray(soundData, sData)
+	}
 	
 	return (join_check == -1 && exit_check == -1)
 		? -1
@@ -2228,8 +2282,11 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 	subData[SOUND_TYPE] = soundfile[0] == '^"' ? SOUND_TYPE_SPEECH : ( soundfile[strlen(soundfile) - 1] == '3' ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
 	subData[PLAY_COUNT] = 0
 	
-	// check if not speech sounds
-	if ( soundfile[0] != '^"' )
+	if ( subData[SOUND_TYPE] == SOUND_TYPE_SPEECH )
+	{
+		// remove the quotes
+		copy(soundfile, strlen(soundfile) - 2, soundfile[1]);
+	}else
 	{
 		new sound_file_name[TOK_LENGTH + 1 + 10]
 		new is_mp3 = ( containi(soundfile, ".mp3") != -1 )
@@ -2252,17 +2309,53 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 		{
 			if ( !file_exists(sound_file_name) )
 			{
+				// now check for all sub folders that start with the same name followed by an underscore
+				if ( ArraySize(modSearchPaths) == 0 )
+				{
+					new modname[32 + 1]
+					get_modname(modname, 31)
+					new modName_len = strlen(modname)
+					modname[modName_len + 1] = 0
+					modname[modName_len] = '_'
+					++modName_len
+					
+					new dirFileName[64]
+					new dirFileName_len = charsmax(dirFileName)
+					new dirHandle = open_dir("..", dirFileName, dirFileName_len)
+					if ( dirHandle != 0 )
+					{
+						do
+						{
+							if ( !equali(modname, dirFileName, modName_len) )
+								continue
+							ArrayPushArray(modSearchPaths, dirFileName)
+						} while ( next_file(dirHandle, dirFileName, dirFileName_len) )
+						close_dir(dirHandle)
+					}
+				}
+				
+				new foundFile = false
 				new alt_sound_file_name[TOK_LENGTH + 1 + 10 + 32]
-				new modname[32]
-				get_modname(modname, 31)
-				formatex(alt_sound_file_name, TOK_LENGTH + 10 + 32, "../%s_downloads/%s", modname, sound_file_name)
-				if ( !file_exists(alt_sound_file_name) )
+				new i
+				new modSearchPath[64]
+				for ( i = 0; i < ArraySize(modSearchPaths); ++i )
+				{
+					ArrayGetArray(modSearchPaths, i, modSearchPath)
+					formatex(alt_sound_file_name, TOK_LENGTH + 10 + 32, "../%s/%s", modSearchPath, sound_file_name)
+					if ( file_exists(alt_sound_file_name) )
+					{
+						foundFile = true
+						copy(sound_file_name, TOK_LENGTH + 10, alt_sound_file_name);
+						break
+					}
+				}
+				
+				if ( !foundFile )
 				{
 					log_amx("Sank Sounds >> Trying to load a file that does not exist. Skipping this file: ^"%s^"", sound_file_name)
 					
 					return -1
 				}
-				copy(sound_file_name, TOK_LENGTH + 10, alt_sound_file_name);
 			}
 			
 			subData[DURATION] = _:cfg_get_duration(sound_file_name, is_mp3 ? SOUND_TYPE_MP3 : SOUND_TYPE_WAV )
@@ -2272,6 +2365,17 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 				log_amx("Sank Sounds >> Sound duration is not valid. File is damaged. Skipping this file: ^"%s^"", sound_file_name)
 				
 				return -1
+			}
+		}
+		
+		// remove ".wav" from files to prevent runtime warnings (using: developer 1)
+		if ( subData[SOUND_TYPE] == SOUND_TYPE_WAV )
+		{
+			new len = strlen(soundfile)
+			if ( len > 4
+				&& equali(soundfile[len - 4], ".wav") )
+			{
+				soundfile[len - 4] = 0;
 			}
 		}
 		
