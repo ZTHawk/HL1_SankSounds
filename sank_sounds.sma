@@ -1988,12 +1988,14 @@ isUserAllowed2Play( id , Float:gametime )
 	// order of checks is important
 	
 	new admin_flags = get_user_flags(id)
+	new will_sound_overlap = gametime < NextSoundTime + SND_DELAY
 	
 	// check if super admin
 	if ( admin_flags & ADMIN_RCON )
 	{
 		// check if super admin has to obey duration
-		if ( !(SND_OBEY_DUR & 4) )
+		if ( !will_sound_overlap
+			|| !(SND_OBEY_DUR & 4) )
 			return RESULT_OK
 		return RESULT_SOUND_DELAY
 	}
@@ -2007,7 +2009,8 @@ isUserAllowed2Play( id , Float:gametime )
 	if ( admin_flags & ACCESS_ADMIN )
 	{
 		// check if admin has to obey duration
-		if ( !(SND_OBEY_DUR & 2) )
+		if ( !will_sound_overlap
+			|| !(SND_OBEY_DUR & 2) )
 			return RESULT_OK
 		return RESULT_SOUND_DELAY
 	}
@@ -2025,7 +2028,7 @@ isUserAllowed2Play( id , Float:gametime )
 		return RESULT_BAD_ALIVE_STATUS
 	
 	// check for sound overlapping + delay time
-	if ( gametime > NextSoundTime + SND_DELAY )
+	if ( !will_sound_overlap )
 		return RESULT_OK
 	
 	// check if overlapping is allowed
