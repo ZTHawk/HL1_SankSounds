@@ -41,9 +41,11 @@
 	SND_IMMUNITY;		"l"         // Definiert den Zugriffslevel welcher Immunität für warn/kick/ban haben soll (Standard ADMIN_LEVEL_A für Rückwärtskompatibilität)
 	                                // "ab" = Jeder mit Zugriff "a" oder "b" hat Immunität
 	                                // "" = Niemand wird Immunität haben (Anführungsstriche sich wichtig!)
+	SND_OBEY_DUR XX;	1			// Definiert wer Soundlänge beachten muss bevor der nächste Sound abgespielt werden kann
 	EXACT_MATCH;		1			// Definiert ob das Wort im Chat genau dem in der config Datei entsprechen muss oder nicht
 	ADMINS_ONLY;		0			// Definiert ob nur Admins Sounds abspielen können
 	DISPLAY_KEYWORDS;	1			// Setzte dies auf 0 wenn du nicht willst das Wörter von Sounds im Chat angezeigt werden sollen
+	FREEZE_TIME_CON;	0			// Zeit in Sekunden die gewartet wird, bevor erste Sounds abgespielt werden (betrifft nur connect/disconnect Sounds)
 
 	# Word/Wav combinations:
 	crap;			sound/misc/awwcrap.Wav;sound/misc/awwcrap2.wav
@@ -77,7 +79,7 @@
  2.1)
 
 SND_MODE:
-Wähle die Optionen aus und addiere sie zusammen
+Wähle die Optionen aus und addiere sie zusammen (0 = Aus)
 1   = Tote können Sounds abspielen
 2   = Lebende können Sounds abspielen
 4   = Tote können Sounds hören
@@ -90,6 +92,18 @@ Wähle die Optionen aus und addiere sie zusammen
 zB: 1 + 4 = 5, bedeutet das nur Tote Sounds abspielen und hören können
 
 Die drei Optionen 16 + 32 + 64 zusammen, ist das gleiche als ob man keine dieser Optionen setzt
+
+
+SND_OBEY_DUR:
+Wähle die Optionen aus und addiere sie zusammen
+0	= Niemand
+1	= Normale Spieler müssen Soundlänge beachten
+2	= Admins mit "ACCESS_ADMIN" müssen Soundlänge beachten
+4	= Admins mit RCON müssen Soundlänge beachten
+
+zB: 1 + 2 = 3, bedeutet, dass normale Spieler und normale Admins die Soundlängen beachten müssen
+7, bedeutet, dass zusätzlich RCON admins die Soundlängen beachten müssen
+
 
 Zusätzliche Configs:
 
@@ -197,17 +211,6 @@ Mit anderen Worten, Snak Sounds kümmert sich darum das die Spieler alle Sounds r
 "mp_sank_sounds_freezetime" <Zeit in Sekunden> :
 
 Dies definiert wie lange es dauert bis der erste betretten/verlassen Sound abgespielt wird (verhindert massig Sounds beim Map wechsel)
-
-"mp_sank_sounds_obey_duration" <Modus> :
-
-Dies definiert wer Soundlängen beachten muss bevor wieder ein sound abgespielt werden kann.
-0 = niemand
-1 = public
-2 = admins
-4 = RCON
-
-zB: 1 + 2 = 3, bedeutet, dass normale Spieler und normale Admins die Soundlängen beachten müssen
-7, bedeutet, dass zusätzlich RCON admins die Soundlängen beachten müssen
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

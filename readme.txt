@@ -41,9 +41,11 @@
 	SND_IMMUNITY;		"l"         // Determine the access levels which shall have immunity to warn/kick/ban (default ADMIN_LEVEL_A for backwards compatability)
 	                                // "ab" = everyone with flag "a" or "b" has immunity
 	                                // "" = noone will have immunity (quotes are important!)
+	SND_OBEY_DUR;		1			// Determine who shall obey duration before next sound will be played
 	EXACT_MATCH;		1			// defines if word in chat must be exactly what is defined in config or be a part of sentence
 	ADMINS_ONLY;		0			// defines if only admins can use sounds
 	DISPLAY_KEYWORDS;	1			// set to 0 if you do not want the keywords of sounds to be displayed in chat
+	FREEZE_TIME_CON;	0			// time in seconds to wait till first sounds are played (applies only to connect/disconnect sounds)
 
 	# Word/Wav combinations:
 	crap;			sound/misc/awwcrap.Wav;sound/misc/awwcrap2.wav
@@ -77,7 +79,7 @@
  2.1)
 
 SND_MODE:
-Choose options below add add then together
+Choose options below add add them together (0 = Off)
 1   = dead can play sounds
 2   = alive can play sounds
 4   = dead can hear sounds
@@ -90,6 +92,18 @@ Choose options below add add then together
 eg: 1 + 4 = 5, means only dead can play and hear sounds
 
 The three options 16 + 32 + 64 together are the same as if you do not set any of them
+
+
+SND_OBEY_DUR:
+Choose options below add add them together
+0	= Noone
+1	= Normal players shall obey sound duration
+2	= Admins with "ACCESS_ADMIN" shall obey sound duration
+4	= Admins with RCON shall obey sound duration
+
+eg: 1 + 2 = 3, means normal players and normal admins have to obey sound duration
+7, means that RCON admins have to obey sound duration too
+
 
 Additional Configs: ( those are optional )
 
@@ -198,17 +212,6 @@ In other word, Sank Sounds will take care so players will download all sounds
 
 This one defines how long to wait till first join/leave sound is played after mapchange
 (to prevent mass sound spamm on map change)
-
-"mp_sank_sounds_obey_duration" <mode> :
-
-This one defines who has to obey the sound duration before they can play a sound again.
-0 = noone
-1 = public
-2 = admins
-4 = RCON
-
-eg: 1 + 2 = 3, means normal players and normal admins have to obey sound duration
-7, means that RCON admins have to obey sound duration too
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
