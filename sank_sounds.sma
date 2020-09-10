@@ -372,6 +372,13 @@
 *	- fixed:
 *		- Always playing first sound.
 *
+* v1.9.0: (2020.09.09)
+*	- changed:
+*		- CVAR "mp_sank_sounds_obey_duration" replaced with config "SND_OBEY_DUR"
+*		- CVAR "mp_sank_sounds_freezetime" replaced with config "FREEZE_TIME_CON"
+*	- fixed:
+*		- Obey duration for admins would prevent them from playing any sound
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -486,7 +493,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.8.9"
+#define PLUGIN_VERSION		"1.9.0"
 
 new Enable_Sound[] =  "sound/misc/woohoo.wav"   // Sound played when Sank Sounds being enabled
 new Disable_Sound[] = "sound/misc/awwcrap.wav"  // Sound played when Sank Sounds being disabled
