@@ -372,7 +372,7 @@
 *	- fixed:
 *		- Always playing first sound.
 *
-* v1.9.0: (2020.09.09)
+* v1.9.0: (2020.09.10)
 *	- changed:
 *		- CVAR "mp_sank_sounds_obey_duration" replaced with config "SND_OBEY_DUR"
 *		- CVAR "mp_sank_sounds_freezetime" replaced with config "FREEZE_TIME_CON"
