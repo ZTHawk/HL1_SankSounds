@@ -12,8 +12,6 @@
 *
 * Functions included in this plugin:
 *	mp_sank_sounds_download	1/0            - turn internal download system on/off
-*	mp_sank_sounds_freezetime <x>          - x = time in seconds to wait till first sounds are played (connect sound)
-*	mp_sank_sounds_obey_duration <x>       - determine whos sounds may overlap (bit mask) (see readme.txt)
 *	amx_sound                              - turn Sank Sounds on/off
 *	amx_sound_help                         - prints all available sounds to console
 *	amx_sound_play <dir/sound>             - plays a specific wav/mp3/speech
@@ -36,9 +34,11 @@
 *	SND_DELAY               - Minimum delay between sounds (float)
 *	SND_MODE XX             - Determinates who can play and who can hear sounds (see readme.txt for details)
 *	SND_IMMUNITY "XYZ"      - Determine the access levels which shall have immunity to warn/ban
+*	SND_OBEY_DUR XX         - Determine who shall obey duration before next sound will be played
 *	EXACT_MATCH 1/0         - Determinates if plugin triggers on exact match, or partial speech match
 *	ADMINS_ONLY 1/0         - Determinates if only admins are allowed to play sounds
 *	DISPLAY_KEYWORDS 1/0    - Determinates if keywords are shown in chat or not
+*	FREEZE_TIME_CON XX      - Time in seconds to wait till first sounds are played (applies only to connect/disconnect sounds)
 *
 * Commands available for each player:
 *	amx_sound_help          -    prints all available sounds to console
@@ -388,9 +388,11 @@
 *		SND_DELAY;		0.0
 *		SND_MODE;		15
 *		SND_IMMUNITY;		"l"
+*		SND_OBEY_DUR;		1
 *		EXACT_MATCH;		1
 *		ADMINS_ONLY;		0
 *		DISPLAY_KEYWORDS;	1
+*		FREEZE_TIME_CON;	0
 *
 *		# Word/Sound combinations:
 *		crap;			misc/awwcrap.Wav;misc/awwcrap2.wav
@@ -501,16 +503,16 @@ new Float:SND_MAX_DUR = 0.0
 new Float:SND_DELAY = 0.0                 // Minimum delay between sounds
 new SND_MODE = 15                         // Determinates who can play and who can hear sounds (dead and alive)
 new SND_IMMUNITY = ACCESS_ADMIN           // Determine the access levels which shall have immunity to warn/ban (default ACCESS_ADMIN for backwards compatability)
+new SND_OBEY_DUR = 1                      // Determine who shall obey duration before next sound will be played
 new EXACT_MATCH = 1                       // Determinates if plugin triggers on exact match, or partial speech match
 new ADMINS_ONLY = 0                       // Determinates if only admins are allowed to play sounds
 new DISPLAY_KEYWORDS = 1                  // Determinates if keywords are shown in chat or not
+new FREEZE_TIME_CON = 0                   // Time in seconds to wait till first sounds are played (applies only to connect/disconnect sounds)
 
 new Float:NextSoundTime                   // spam protection
 new Float:Join_exit_SoundTime             // spam protection 2
 new Float:LastSoundTime = 0.0
 new bSoundsEnabled = 1                    // amx_sound <on/off> or <1/0>
-
-new CVAR_freezetime, CVAR_obey_duration
 
 new g_max_players
 new banned_player_steamids[MAX_BANS][60]
@@ -529,9 +531,11 @@ enum
 	PARSE_SND_DELAY,
 	PARSE_SND_MODE,
 	PARSE_SND_IMMUNITY,
+	PARSE_SND_OBEY_DUR,
 	PARSE_EXACT_MATCH,
 	PARSE_ADMINS_ONLY,
 	PARSE_DISPLAY_KEYWORDS,
+	PARSE_FREEZE_TIME_CON,
 	PARSE_KEYWORD
 }
 
@@ -614,8 +618,6 @@ public plugin_init( )
 	register_clcmd("say_team", "HandleSay")
 	
 	register_cvar("mp_sank_sounds_download", "1")
-	CVAR_freezetime = register_cvar("mp_sank_sounds_freezetime", "0")
-	CVAR_obey_duration = register_cvar("mp_sank_sounds_obey_duration", "1")
 	register_cvar("mp_sank_sounds_motd_address", "")
 	
 	g_max_players = get_maxplayers()
@@ -681,7 +683,7 @@ public client_putinserver( id )
 	SndOn[id] = 1
 	
 	new Float:gametime = get_gametime()
-	if ( gametime <= get_pcvar_num(CVAR_freezetime) )
+	if ( gametime <= FREEZE_TIME_CON )
 		return
 	
 	new sData[SOUND_DATA_BASE]
@@ -720,7 +722,7 @@ public client_disconnected( id )
 	restrict_playing_sounds[id] = -1
 	
 	new Float:gametime = get_gametime()
-	if ( gametime <= get_pcvar_num(CVAR_freezetime) )
+	if ( gametime <= FREEZE_TIME_CON )
 		return
 	
 	new sData[SOUND_DATA_BASE]
@@ -832,6 +834,10 @@ public amx_sound_add( id , level , cid )
 	{
 		SND_IMMUNITY = str_to_num(Sound)
 		configOption = 1
+	}else if ( equali(Word, "SND_OBEY_DUR") )
+	{
+		SND_OBEY_DUR = str_to_num(Sound)
+		configOption = 1
 	}else if ( equali(Word, "EXACT_MATCH") )
 	{
 		EXACT_MATCH = str_to_num(Sound)
@@ -843,6 +849,10 @@ public amx_sound_add( id , level , cid )
 	}else if ( equali(Word, "DISPLAY_KEYWORDS") )
 	{
 		DISPLAY_KEYWORDS = str_to_num(Sound)
+		configOption = 1
+	}else if ( equali(Word, "FREEZE_TIME_CON") )
+	{
+		FREEZE_TIME_CON = str_to_num(Sound)
 		configOption = 1
 	}
 	
@@ -1188,11 +1198,15 @@ public amx_sound_write( id , level , cid )
 	get_flags(SND_IMMUNITY, snd_imm_str, 26)
 	formatex(Text, Textlen, "SND_IMMUNITY;^t^t^"%s^"^n", snd_imm_str)
 	fputs(file, Text)
+	formatex(Text, Textlen, "SND_OBEY_DUR;^t^t%d^n", SND_OBEY_DUR)
+	fputs(file, Text)
 	formatex(Text, Textlen, "EXACT_MATCH;^t^t%d^n", EXACT_MATCH)
 	fputs(file, Text)
 	formatex(Text, Textlen, "ADMINS_ONLY;^t^t%d^n", ADMINS_ONLY)
 	fputs(file, Text)
 	formatex(Text, Textlen, "DISPLAY_KEYWORDS;^t%d^n", DISPLAY_KEYWORDS)
+	fputs(file, Text)
+	formatex(Text, Textlen, "FREEZE_TIME_CON;^t%d^n", FREEZE_TIME_CON)
 	fputs(file, Text)
 	fputs(file, "^n")		// blank line
 	fputs(file, "# Word/Sound combinations:^n")
@@ -1272,14 +1286,14 @@ public amx_sound_debug( id , level , cid )
 	{
 		client_print(id, print_console, "SND_JOIN: %s", join_snd_buff)
 		client_print(id, print_console, "SND_EXIT: %s", exit_snd_buff)
-		client_print(id, print_console, "SND_DELAY: %f^nSND_MODE: %d^nSND_IMMUNITY: %s^nEXACT_MATCH: %d", SND_DELAY, SND_MODE, snd_imm_str, EXACT_MATCH)
-		client_print(id, print_console, "ADMINS_ONLY: %d^nDISPLAY_KEYWORDS: %d", ADMINS_ONLY, DISPLAY_KEYWORDS)
+		client_print(id, print_console, "SND_DELAY: %f^nSND_MODE: %d^nSND_IMMUNITY: %s^nSND_OBEY_DUR: %d^nEXACT_MATCH: %d", SND_DELAY, SND_MODE, snd_imm_str, SND_OBEY_DUR, EXACT_MATCH)
+		client_print(id, print_console, "ADMINS_ONLY: %d^nDISPLAY_KEYWORDS: %d^nFREEZE_TIME_CON: %d", ADMINS_ONLY, DISPLAY_KEYWORDS, FREEZE_TIME_CON)
 	}else
 	{
 		server_print("SND_JOIN: %s", join_snd_buff)
 		server_print("SND_EXIT: %s", exit_snd_buff)
-		server_print("SND_DELAY: %f^nSND_MODE: %d^nSND_IMMUNITY: %s^nEXACT_MATCH: %d", SND_DELAY, SND_MODE, snd_imm_str, EXACT_MATCH)
-		server_print("ADMINS_ONLY: %d^nDISPLAY_KEYWORDS: %d", ADMINS_ONLY, DISPLAY_KEYWORDS)
+		server_print("SND_DELAY: %f^nSND_MODE: %d^nSND_IMMUNITY: %s^nSND_OBEY_DUR: %d^nEXACT_MATCH: %d", SND_DELAY, SND_MODE, snd_imm_str, SND_OBEY_DUR, EXACT_MATCH)
+		server_print("ADMINS_ONLY: %d^nDISPLAY_KEYWORDS: %d^nFREEZE_TIME_CON: %d", ADMINS_ONLY, DISPLAY_KEYWORDS, FREEZE_TIME_CON)
 	}
 	
 	// Print out the matrix of sound data, so we got what we think we did
@@ -1569,9 +1583,8 @@ public HandleSay( id )
 	if ( sData[SOUND_AMOUNT] == 0 )
 		return PLUGIN_CONTINUE
 	
-	new obey_duration_mode = get_pcvar_num(CVAR_obey_duration)
 	new Float:gametime = get_gametime()
-	new allowedToPlay = isUserAllowed2Play(id, gametime, obey_duration_mode)
+	new allowedToPlay = isUserAllowed2Play(id, gametime)
 	if ( allowedToPlay == RESULT_OK )
 	{
 		displayQuotaWarning(id)
@@ -1623,8 +1636,7 @@ public HandleSay( id )
 	{
 		if ( !displayQuotaExceeded(id) )
 		{
-			if ( allowedToPlay == RESULT_SOUND_DELAY
-				&& obey_duration_mode != 0 )
+			if ( allowedToPlay == RESULT_SOUND_DELAY )
 				client_print(id, print_chat, "Sank Sounds >> Sound is still playing ( wait %3.1f seconds )", NextSoundTime + SND_DELAY - gametime)
 			else if ( allowedToPlay != RESULT_QUOTA_EXCEEDED
 				&& allowedToPlay != RESULT_QUOTA_DURATION_EXCEEDED )
@@ -1804,12 +1816,16 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 					parse_option = PARSE_SND_MODE
 				else if ( equali(temp_str, "SND_IMMUNITY") )
 					parse_option = PARSE_SND_IMMUNITY
+				else if ( equali(temp_str, "SND_OBEY_DUR") )
+					parse_option = PARSE_SND_OBEY_DUR
 				else if ( equali(temp_str, "EXACT_MATCH") )
 					parse_option = PARSE_EXACT_MATCH
 				else if ( equali(temp_str, "ADMINS_ONLY") )
 					parse_option = PARSE_ADMINS_ONLY
 				else if ( equali(temp_str, "DISPLAY_KEYWORDS") )
 					parse_option = PARSE_DISPLAY_KEYWORDS
+				else if ( equali(temp_str, "FREEZE_TIME_CON") )
+					parse_option = PARSE_FREEZE_TIME_CON
 				else
 				{
 					parse_option = PARSE_KEYWORD
@@ -1873,6 +1889,10 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 						}else
 							SND_IMMUNITY = read_flags(temp_str)
 					}
+					case PARSE_SND_OBEY_DUR:
+					{
+						SND_OBEY_DUR = str_to_num(temp_str)
+					}
 					case PARSE_EXACT_MATCH:
 					{
 						EXACT_MATCH = str_to_num(temp_str)
@@ -1884,6 +1904,10 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 					case PARSE_DISPLAY_KEYWORDS:
 					{
 						DISPLAY_KEYWORDS = str_to_num(temp_str)
+					}
+					case PARSE_FREEZE_TIME_CON:
+					{
+						FREEZE_TIME_CON = str_to_num(temp_str)
 					}
 					case PARSE_KEYWORD:
 					{
@@ -1959,7 +1983,7 @@ parse_sound_file( loadfile[] , precache_sounds = 1 )
 // Returns status indicating if user is allowed to play a sound
 // or the reason why he is not
 //////////////////////////////////////////////////////////////////////////////
-isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
+isUserAllowed2Play( id , Float:gametime )
 {
 	// order of checks is important
 	
@@ -1969,7 +1993,7 @@ isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 	if ( admin_flags & ADMIN_RCON )
 	{
 		// check if super admin has to obey duration
-		if ( !(obey_duration_mode & 4) )
+		if ( !(SND_OBEY_DUR & 4) )
 			return RESULT_OK
 		return RESULT_SOUND_DELAY
 	}
@@ -1983,7 +2007,7 @@ isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 	if ( admin_flags & ACCESS_ADMIN )
 	{
 		// check if admin has to obey duration
-		if ( !(obey_duration_mode & 2) )
+		if ( !(SND_OBEY_DUR & 2) )
 			return RESULT_OK
 		return RESULT_SOUND_DELAY
 	}
@@ -2006,7 +2030,7 @@ isUserAllowed2Play( id , Float:gametime , obey_duration_mode )
 	
 	// check if overlapping is allowed
 	// or for delay time
-	if ( !(obey_duration_mode & 1)
+	if ( !(SND_OBEY_DUR & 1)
 		&& gametime > LastSoundTime + SND_DELAY )
 		return RESULT_OK
 	
