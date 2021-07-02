@@ -379,6 +379,10 @@
 *	- fixed:
 *		- Obey duration for admins would prevent them from playing any sound
 *
+* v1.9.1: (2021.07.02)
+*	- changed:
+*		- using precache generic for all types (instead of precache sound for WAVs)
+*
 * IMPORTANT:
 *	a) if u want to use the internal download system do not use more than 200 sounds (HL cannot handle it)
 *		(also depending on map, you may need to use even less)
@@ -493,7 +497,7 @@
 #define ACCESS_ADMIN	ADMIN_LEVEL_A
 
 #define PLUGIN_AUTHOR		"White Panther, Luke Sankey, HunteR"
-#define PLUGIN_VERSION		"1.9.0"
+#define PLUGIN_VERSION		"1.9.1"
 
 new Enable_Sound[] =  "sound/misc/woohoo.wav"   // Sound played when Sank Sounds being enabled
 new Disable_Sound[] = "sound/misc/awwcrap.wav"  // Sound played when Sank Sounds being disabled
@@ -2336,17 +2340,11 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 	{
 		new sound_file_name[TOK_LENGTH + 1 + 10]
 		new is_mp3 = ( containi(soundfile, ".mp3") != -1 )
-		new isWav_inSound_folder = 0
-		if ( !is_mp3 )
-		{	// ".mp3" in not in the string
-			if ( equali(soundfile, "sound/", 6) )
-			{
-				formatex(sound_file_name, TOK_LENGTH + 10, "%s", soundfile)
-				isWav_inSound_folder = 1
-			}else
-				formatex(sound_file_name, TOK_LENGTH + 10, "sound/../%s", soundfile)
-		}
-		else
+		if ( !is_mp3 // ".mp3" in not in the string
+			&& !equali(soundfile, "sound/", 6) )
+		{
+			formatex(sound_file_name, TOK_LENGTH + 10, "sound/../%s", soundfile)
+		} else
 		{
 			copy(sound_file_name, TOK_LENGTH + 10, soundfile)
 		}
@@ -2418,11 +2416,7 @@ array_add_inner_element( num , elem , soundfile[] , allow_check_existence = 1 , 
 			&& precache_sounds == 1
 			&& allowed_to_precache )
 		{
-			if ( is_mp3
-				|| !isWav_inSound_folder )
-				engfunc(EngFunc_PrecacheGeneric, soundfile)
-			else
-				engfunc(EngFunc_PrecacheSound, soundfile[6])
+			engfunc(EngFunc_PrecacheGeneric, soundfile)
 		}
 		
 		// remove ".wav" from files to prevent runtime warnings (using: developer 1)
